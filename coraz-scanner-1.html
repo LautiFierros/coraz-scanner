@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CORAZ · Control de Stock</title>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.7.0/lib/msal-browser.min.js"></script>
+<style>
+  :root{
+    --bg: #14120f;
+    --panel: #1d1a15;
+    --panel-2: #262119;
+    --line: #3a3226;
+    --amber: #e8891a;
+    --amber-dim: #8a5518;
+    --text: #f2ede2;
+    --text-dim: #a89e8c;
+    --ok: #4a9d5f;
+    --bad: #c14b3a;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html,body{margin:0; padding:0; background:var(--bg); color:var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif; overscroll-behavior:none;}
+  body{padding-bottom: 90px;}
+  header{
+    padding: 18px 16px 14px; border-bottom: 1px solid var(--line);
+    display:flex; align-items:baseline; justify-content:space-between;
+  }
+  header h1{font-size: 15px; letter-spacing: .12em; text-transform: uppercase; margin:0; color: var(--amber); font-weight:700;}
+  header .sub{font-size:11px; color:var(--text-dim);}
+  #gear{background:none; border:none; color:var(--text-dim); font-size:20px; padding:4px 8px;}
+
+  main{padding: 14px 14px 0;}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:12px;}
+
+  .field{margin-bottom:10px;}
+  .field label{display:block; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-dim); margin-bottom:5px;}
+  .field input, .field select, .field textarea{
+    width:100%; background:var(--panel-2); border:1px solid var(--line); color:var(--text);
+    padding:11px 10px; border-radius:7px; font-size:16px; font-family:inherit;
+  }
+  .field textarea{resize:vertical; min-height:44px;}
+  .field .hint{font-size:11px; color:var(--text-dim); margin-top:4px;}
+  .code-display{font-family: "SF Mono", "Consolas", monospace; font-size:20px; letter-spacing:.03em; color:var(--amber); word-break:break-all;}
+
+  .row{display:flex; gap:8px;}
+  .row > *{flex:1;}
+
+  button.primary{
+    width:100%; background:var(--amber); color:#1a1409; border:none; font-weight:700;
+    padding:15px; border-radius:8px; font-size:15px; letter-spacing:.02em;
+  }
+  button.primary:active{background:var(--amber-dim);}
+  button.secondary{
+    width:100%; background:transparent; border:1px solid var(--line); color:var(--text);
+    padding:13px; border-radius:8px; font-size:14px;
+  }
+  button.ghost{background:none; border:none; color:var(--text-dim); font-size:13px; padding:8px; text-decoration:underline;}
+  button:disabled{opacity:.4;}
+
+  #authBar{padding:10px 14px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; font-size:12.5px;}
+  #authBar .who{color:var(--text-dim);}
+  #authBar .who strong{color:var(--ok);}
+  #authGate{padding:40px 20px; text-align:center;}
+  #authGate p{color:var(--text-dim); font-size:13px; line-height:1.6; margin-bottom:18px;}
+
+  #scanArea{position:relative; background:#000; border-radius:10px; overflow:hidden; margin-bottom:12px;}
+  #scanArea video{width:100%; display:block; max-height:52vh; object-fit:cover;}
+  #scanArea .frame{
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:78%; height:34%; border:2px solid var(--amber); border-radius:8px; box-shadow:0 0 0 999px rgba(0,0,0,.4);
+  }
+  #scanArea .hint{position:absolute; bottom:8px; left:0; right:0; text-align:center; font-size:12px; color:#fff;}
+
+  .badge{display:inline-block; font-size:10px; padding:3px 8px; border-radius:99px; text-transform:uppercase; letter-spacing:.05em;}
+  .badge.ok{background:rgba(74,157,95,.18); color:var(--ok);}
+  .badge.bad{background:rgba(193,75,58,.18); color:var(--bad);}
+  .badge.pending{background:rgba(232,137,26,.18); color:var(--amber);}
+
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  th,td{text-align:left; padding:8px 6px; border-bottom:1px solid var(--line);}
+  th{color:var(--text-dim); font-weight:500; font-size:11px; text-transform:uppercase;}
+  td.num{font-family:monospace; color:var(--amber);}
+
+  #toast{
+    position:fixed; left:14px; right:14px; bottom:14px; background:var(--panel-2); border:1px solid var(--line);
+    padding:12px 14px; border-radius:8px; font-size:14px; display:none; z-index:50;
+  }
+  #toast.show{display:block;}
+  #toast.ok{border-color: var(--ok);}
+  #toast.bad{border-color: var(--bad);}
+
+  .modal-backdrop{position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:flex-end; z-index:60;}
+  .modal-backdrop.show{display:flex;}
+  .modal{background:var(--panel); border-top:1px solid var(--line); border-radius:14px 14px 0 0; padding:18px 16px 24px; width:100%; max-height:85vh; overflow-y:auto;}
+  .modal h2{font-size:14px; text-transform:uppercase; letter-spacing:.08em; color:var(--amber); margin:0 0 12px;}
+  .modal p{font-size:12.5px; color:var(--text-dim); line-height:1.5;}
+
+  footer.tabs{
+    position:fixed; bottom:0; left:0; right:0; background:var(--panel); border-top:1px solid var(--line);
+    display:flex; padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+  }
+  footer.tabs button{flex:1; background:none; border:none; color:var(--text-dim); font-size:11px; padding:8px 4px;}
+  footer.tabs button.active{color:var(--amber);}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>CORAZ · Stock</h1>
+    <div class="sub" id="countSub">0 items cargados en esta sesión</div>
+  </div>
+  <button id="gear" onclick="openModal('config')">⚙</button>
+</header>
+
+<div id="authBar" style="display:none;">
+  <span class="who" id="authBarLabel">Conectado como <strong id="whoName">—</strong></span>
+  <button class="ghost" onclick="logout()">Salir</button>
+</div>
+
+<div id="authGate">
+  <p>Iniciá sesión con tu cuenta personal de Microsoft para que los conteos se guarden directo en tu Excel de OneDrive.<br><br>Antes necesitás cargar el <strong>Client ID</strong> de tu app de Azure en ⚙ Configuración.</p>
+  <button class="primary" onclick="login()">Iniciar sesión con Microsoft</button>
+  <div style="margin:14px 0; color:var(--text-dim); font-size:11px; text-transform:uppercase; letter-spacing:.08em;">— o —</div>
+  <button class="secondary" onclick="useLocalMode()">📱 Guardado local en este dispositivo</button>
+  <p style="margin-top:10px;">Sin login, sin Azure. Los conteos quedan guardados solo en este celular — exportalos a CSV cuando quieras pasarlos al Excel.</p>
+</div>
+
+<main id="mainApp" style="display:none;">
+
+  <div class="card" id="scanCard">
+    <div id="scanArea" style="display:none;">
+      <video id="video" autoplay playsinline muted></video>
+      <div class="frame"></div>
+      <div class="hint">Apuntá al código de barras</div>
+    </div>
+    <button class="primary" id="scanBtn" onclick="toggleScan()">📷 Escanear código</button>
+    <div style="margin-top:8px;">
+      <button class="ghost" onclick="openModal('manual')">Ingresar código manualmente</button>
+    </div>
+  </div>
+
+  <div class="card" id="formCard" style="display:none;">
+    <div class="field">
+      <label>Código escaneado</label>
+      <div class="code-display" id="currentCode">—</div>
+    </div>
+    <div id="dynamicFieldsContainer"></div>
+    <button class="primary" onclick="saveItem()">Guardar y continuar escaneando</button>
+    <div style="margin-top:8px;">
+      <button class="ghost" onclick="cancelForm()">Cancelar</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <strong style="font-size:13px;">Log de la sesión</strong>
+      <button class="ghost" onclick="exportCSV()">Exportar CSV</button>
+    </div>
+    <table id="logTable">
+      <thead><tr><th>Código</th><th id="logCol2">Detalle</th><th>Excel</th></tr></thead>
+      <tbody id="logBody"></tbody>
+    </table>
+    <div id="emptyLog" style="color:var(--text-dim); font-size:13px; padding:10px 0;">Todavía no escaneaste nada.</div>
+  </div>
+
+</main>
+
+<footer class="tabs">
+  <button class="active">Escanear</button>
+</footer>
+
+<div id="toast"></div>
+
+<!-- Modal: config -->
+<div class="modal-backdrop" id="modal-config">
+  <div class="modal">
+    <h2>Configuración</h2>
+    <p>Estos tres datos salen de tu app registrada en Azure (portal.azure.com → Entra ID → App registrations) y de tu archivo real en OneDrive.</p>
+    <div class="field">
+      <label>Client ID (de tu app en Azure)</label>
+      <input id="cfgClientId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+    </div>
+    <div class="field">
+      <label>Ruta del archivo en OneDrive</label>
+      <input id="cfgPath" placeholder="ControlStock.xlsx">
+      <div class="hint">Relativa a la raíz de tu OneDrive. Si está en una carpeta: Carpeta/Archivo.xlsx</div>
+    </div>
+    <div class="field">
+      <label>Nombre de la tabla en Excel</label>
+      <input id="cfgTable" placeholder="Tabla1">
+      <div class="hint">Lo ves en Excel: clic en la tabla → pestaña "Diseño de tabla" → "Nombre de tabla"</div>
+    </div>
+    <div class="field">
+      <label>Campos del formulario (uno por línea)</label>
+      <textarea id="cfgFields" style="min-height:110px;"></textarea>
+      <div class="hint">Además del Código (fijo). Agregá una línea = un campo nuevo. Borrá una línea = lo elimina. Editá el texto = lo renombra. El orden acá tiene que ser el mismo orden de columnas en tu tabla de Excel: primero Fecha, después Código, y después estos campos en este orden.</div>
+    </div>
+    <div class="field">
+      <label>Catálogo (pegar CSV: codigo,producto — una línea por producto)</label>
+      <textarea id="cfgCatalog" style="min-height:100px;"></textarea>
+      <div class="hint">Si tenés un campo llamado "Producto" en la lista de arriba, se autocompleta con esto al escanear.</div>
+    </div>
+    <button class="primary" onclick="saveConfig()">Guardar configuración</button>
+    <div style="margin-top:8px;">
+      <button class="ghost" onclick="closeModal('config')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: manual entry -->
+<div class="modal-backdrop" id="modal-manual">
+  <div class="modal">
+    <h2>Ingreso manual</h2>
+    <div class="field">
+      <label>Código de barras</label>
+      <input id="manualCode" inputmode="numeric" placeholder="Escribí el código">
+    </div>
+    <button class="primary" onclick="submitManual()">Continuar</button>
+    <div style="margin-top:8px;">
+      <button class="ghost" onclick="closeModal('manual')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let stream = null;
+let scanning = false;
+let detector = null;
+let catalog = {}; // codigo -> producto
+let sessionLog = [];
+let detectLoop = null;
+
+let clientId = "";
+let filePath = "";
+let tableName = "";
+let msalInstance = null;
+let account = null;
+let localMode = false;
+let customFields = ["Producto", "Cantidad contada", "Ubicación", "Estado", "Notas"];
+
+const STORAGE_KEY = 'coraz-scanner-config';
+const LOCAL_MODE_KEY = 'coraz-scanner-localmode';
+const LOCAL_DATA_KEY = 'coraz-scanner-local-data';
+const GRAPH_SCOPES = ["Files.ReadWrite"];
+
+function slugify(label){
+  return label.toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "campo";
+}
+
+async function init(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      const parsed = JSON.parse(raw);
+      clientId = parsed.clientId || "";
+      filePath = parsed.filePath || "";
+      tableName = parsed.tableName || "";
+      catalog = parsed.catalog || {};
+      if(Array.isArray(parsed.customFields) && parsed.customFields.length > 0){
+        customFields = parsed.customFields;
+      }
+    }
+  }catch(e){ /* no config yet */ }
+
+  if("BarcodeDetector" in window){
+    try{
+      const formats = await BarcodeDetector.getSupportedFormats();
+      detector = new BarcodeDetector({formats});
+    }catch(e){ detector = null; }
+  }
+
+  if(localStorage.getItem(LOCAL_MODE_KEY) === '1'){
+    localMode = true;
+    try{
+      const raw = localStorage.getItem(LOCAL_DATA_KEY);
+      if(raw) sessionLog = JSON.parse(raw);
+    }catch(e){ sessionLog = []; }
+    updateAuthUI();
+  } else if(clientId){
+    await setupMsal();
+  }
+  updateLogView();
+}
+init();
+
+function useLocalMode(){
+  localMode = true;
+  localStorage.setItem(LOCAL_MODE_KEY, '1');
+  try{
+    const raw = localStorage.getItem(LOCAL_DATA_KEY);
+    sessionLog = raw ? JSON.parse(raw) : [];
+  }catch(e){ sessionLog = []; }
+  updateAuthUI();
+  updateLogView();
+}
+
+function saveLocalData(){
+  try{
+    localStorage.setItem(LOCAL_DATA_KEY, JSON.stringify(sessionLog));
+  }catch(e){ /* storage lleno o no disponible */ }
+}
+
+async function setupMsal(){
+  msalInstance = new msal.PublicClientApplication({
+    auth: {
+      clientId: clientId,
+      authority: "https://login.microsoftonline.com/consumers",
+      redirectUri: window.location.origin + window.location.pathname
+    },
+    cache: { cacheLocation: "localStorage" }
+  });
+  await msalInstance.initialize();
+  const resp = await msalInstance.handleRedirectPromise().catch(()=>null);
+  if(resp && resp.account){
+    account = resp.account;
+  } else {
+    const accounts = msalInstance.getAllAccounts();
+    if(accounts.length > 0) account = accounts[0];
+  }
+  updateAuthUI();
+}
+
+function updateAuthUI(){
+  const gate = document.getElementById('authGate');
+  const bar = document.getElementById('authBar');
+  const app = document.getElementById('mainApp');
+  const label = document.getElementById('authBarLabel');
+  if(localMode){
+    gate.style.display = 'none';
+    bar.style.display = 'flex';
+    app.style.display = 'block';
+    label.innerHTML = '📱 <strong>Guardado local en este dispositivo</strong>';
+  } else if(account){
+    gate.style.display = 'none';
+    bar.style.display = 'flex';
+    app.style.display = 'block';
+    label.innerHTML = 'Conectado como <strong id="whoName">' + (account.username || account.name || "cuenta Microsoft") + '</strong>';
+  } else {
+    gate.style.display = 'block';
+    bar.style.display = 'none';
+    app.style.display = 'none';
+  }
+}
+
+async function login(){
+  if(!clientId){
+    showToast("Primero cargá el Client ID en ⚙ Configuración", "bad");
+    openModal('config');
+    return;
+  }
+  if(!msalInstance) await setupMsal();
+  try{
+    await msalInstance.loginRedirect({scopes: GRAPH_SCOPES});
+  }catch(e){
+    showToast("No se pudo iniciar sesión: " + e.message, "bad");
+  }
+}
+
+function logout(){
+  if(localMode){
+    localMode = false;
+    localStorage.removeItem(LOCAL_MODE_KEY);
+    sessionLog = [];
+    updateAuthUI();
+    updateLogView();
+    return;
+  }
+  if(msalInstance && account){
+    msalInstance.logoutRedirect({account});
+  }
+}
+
+async function getGraphToken(){
+  if(!account) throw new Error("No hay sesión iniciada");
+  try{
+    const res = await msalInstance.acquireTokenSilent({scopes: GRAPH_SCOPES, account});
+    return res.accessToken;
+  }catch(e){
+    const res = await msalInstance.acquireTokenRedirect({scopes: GRAPH_SCOPES});
+    throw new Error("Redirigiendo a iniciar sesión de nuevo...");
+  }
+}
+
+function openModal(name){
+  if(name === 'config'){
+    document.getElementById('cfgClientId').value = clientId;
+    document.getElementById('cfgPath').value = filePath;
+    document.getElementById('cfgTable').value = tableName;
+    document.getElementById('cfgFields').value = customFields.join("\n");
+    document.getElementById('cfgCatalog').value = Object.entries(catalog).map(([k,v])=>k+","+v).join("\n");
+  }
+  document.getElementById('modal-'+name).classList.add('show');
+}
+function closeModal(name){
+  document.getElementById('modal-'+name).classList.remove('show');
+}
+
+async function saveConfig(){
+  const newClientId = document.getElementById('cfgClientId').value.trim();
+  filePath = document.getElementById('cfgPath').value.trim().replace(/^\/+/, "");
+  tableName = document.getElementById('cfgTable').value.trim();
+
+  const fieldsRaw = document.getElementById('cfgFields').value;
+  const newFields = fieldsRaw.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+  customFields = newFields.length > 0 ? newFields : customFields;
+
+  const raw = document.getElementById('cfgCatalog').value.trim();
+  catalog = {};
+  if(raw){
+    raw.split("\n").forEach(line=>{
+      const idx = line.indexOf(",");
+      if(idx > -1){
+        const code = line.slice(0,idx).trim();
+        const name = line.slice(idx+1).trim();
+        if(code) catalog[code] = name;
+      }
+    });
+  }
+  const clientIdChanged = newClientId !== clientId;
+  clientId = newClientId;
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({clientId, filePath, tableName, catalog, customFields}));
+    showToast("Configuración guardada", "ok");
+  }catch(e){
+    showToast("No se pudo guardar la configuración", "bad");
+  }
+  closeModal('config');
+  if(clientIdChanged && clientId && !localMode){
+    await setupMsal();
+  }
+}
+
+async function toggleScan(){
+  if(scanning){ stopScan(); return; }
+  if(!detector){
+    showToast("Este navegador no soporta escaneo de cámara. Usá 'ingresar manualmente'.", "bad");
+    return;
+  }
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
+    const video = document.getElementById('video');
+    video.srcObject = stream;
+    document.getElementById('scanArea').style.display = 'block';
+    document.getElementById('scanBtn').textContent = "⏹ Detener cámara";
+    scanning = true;
+    detectLoop = requestAnimationFrame(scanFrame);
+  }catch(e){
+    showToast("No se pudo acceder a la cámara. Revisá permisos del navegador.", "bad");
+  }
+}
+
+function stopScan(){
+  scanning = false;
+  if(detectLoop) cancelAnimationFrame(detectLoop);
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; }
+  document.getElementById('scanArea').style.display = 'none';
+  document.getElementById('scanBtn').textContent = "📷 Escanear código";
+}
+
+async function scanFrame(){
+  if(!scanning) return;
+  const video = document.getElementById('video');
+  try{
+    const codes = await detector.detect(video);
+    if(codes.length > 0){
+      const value = codes[0].rawValue;
+      if(navigator.vibrate) navigator.vibrate(80);
+      stopScan();
+      onCodeCaptured(value);
+      return;
+    }
+  }catch(e){ /* keep trying */ }
+  detectLoop = requestAnimationFrame(scanFrame);
+}
+
+function submitManual(){
+  const code = document.getElementById('manualCode').value.trim();
+  if(!code){ return; }
+  closeModal('manual');
+  document.getElementById('manualCode').value = "";
+  onCodeCaptured(code);
+}
+
+function renderDynamicFields(){
+  const container = document.getElementById('dynamicFieldsContainer');
+  container.innerHTML = "";
+  customFields.forEach(label=>{
+    const id = 'dyn_' + slugify(label);
+    const div = document.createElement('div');
+    div.className = 'field';
+    div.innerHTML = `<label>${label}</label><input id="${id}" data-label="${label}">`;
+    container.appendChild(div);
+  });
+}
+
+function onCodeCaptured(code){
+  document.getElementById('currentCode').textContent = code;
+  renderDynamicFields();
+  customFields.forEach(label=>{
+    const id = 'dyn_' + slugify(label);
+    const el = document.getElementById(id);
+    if(!el) return;
+    if(/producto/i.test(label) && catalog[code]){
+      el.value = catalog[code];
+    } else {
+      el.value = "";
+    }
+  });
+  document.getElementById('formCard').style.display = 'block';
+  document.getElementById('scanCard').style.display = 'none';
+}
+
+function cancelForm(){
+  document.getElementById('formCard').style.display = 'none';
+  document.getElementById('scanCard').style.display = 'block';
+}
+
+async function saveItem(){
+  const item = {
+    fecha: new Date().toISOString(),
+    codigo: document.getElementById('currentCode').textContent
+  };
+  const values = [item.fecha, item.codigo];
+  customFields.forEach(label=>{
+    const id = 'dyn_' + slugify(label);
+    const el = document.getElementById(id);
+    const val = el ? el.value : "";
+    item[slugify(label)] = val;
+    item['_label_' + slugify(label)] = label;
+    values.push(val);
+  });
+  item._fieldOrder = customFields.map(slugify);
+
+  item.enviado = "pendiente";
+  sessionLog.unshift(item);
+  updateLogView();
+  cancelForm();
+
+  if(localMode){
+    item.enviado = "guardado local";
+    saveLocalData();
+    updateLogView();
+    showToast("Guardado en el celular (" + sessionLog.length + " en total)", "ok");
+    return;
+  }
+
+  if(!filePath || !tableName){
+    item.enviado = "sin config";
+    updateLogView();
+    showToast("Falta configurar ruta de archivo o tabla en ⚙", "bad");
+    return;
+  }
+
+  try{
+    const token = await getGraphToken();
+    const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
+    const url = `https://graph.microsoft.com/v1.0/me/drive/root:/${encodedPath}:/workbook/tables('${encodeURIComponent(tableName)}')/rows/add`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + token,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({values: [values]})
+    });
+    if(res.ok){
+      item.enviado = "en Excel";
+      showToast("Guardado en Excel (" + sessionLog.length + " en la sesión)", "ok");
+    } else {
+      const errBody = await res.text();
+      item.enviado = "error";
+      showToast("Error de Excel (" + res.status + "). Ver log/CSV.", "bad");
+      console.error(errBody);
+    }
+  }catch(e){
+    item.enviado = "error";
+    showToast("Error de conexión: " + e.message, "bad");
+  }
+  updateLogView();
+}
+
+function updateLogView(){
+  const body = document.getElementById('logBody');
+  const empty = document.getElementById('emptyLog');
+  const logCol2 = document.getElementById('logCol2');
+  logCol2.textContent = customFields[0] || "Detalle";
+  document.getElementById('countSub').textContent = sessionLog.length + " items cargados en esta sesión";
+  body.innerHTML = "";
+  if(sessionLog.length === 0){ empty.style.display='block'; return; }
+  empty.style.display='none';
+  const firstKey = customFields[0] ? slugify(customFields[0]) : null;
+  sessionLog.forEach(it=>{
+    const tr = document.createElement('tr');
+    let badgeClass = 'pending';
+    if(it.enviado === 'en Excel' || it.enviado === 'guardado local') badgeClass = 'ok';
+    if(it.enviado === 'error' || it.enviado === 'sin config') badgeClass = 'bad';
+    const detalle = firstKey && it[firstKey] ? it[firstKey] : '—';
+    tr.innerHTML = `<td class="num">${it.codigo}</td><td>${detalle}</td><td><span class="badge ${badgeClass}">${it.enviado}</span></td>`;
+    body.appendChild(tr);
+  });
+}
+
+function exportCSV(){
+  if(sessionLog.length === 0){ showToast("No hay items para exportar", "bad"); return; }
+  const headers = ["fecha","codigo", ...customFields.map(slugify), "enviado"];
+  const displayHeaders = ["fecha","codigo", ...customFields, "enviado"];
+  const rows = sessionLog.map(it=> headers.map(h => `"${(it[h]||"").toString().replace(/"/g,'""')}"`).join(","));
+  const csv = displayHeaders.join(",") + "\n" + rows.join("\n");
+  const blob = new Blob([csv], {type:"text/csv"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = "coraz-stock-" + new Date().toISOString().slice(0,10) + ".csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+let toastTimer = null;
+function showToast(msg, type){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = "show " + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{ t.className = ""; }, 2600);
+}
+</script>
+</body>
+</html>
