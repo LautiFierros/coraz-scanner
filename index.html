@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>CORAZ · Control de Stock</title>
 <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.7.0/lib/msal-browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
     --bg: #14120f;
@@ -179,7 +180,7 @@
   <button class="primary" onclick="login()">Iniciar sesión con Microsoft</button>
   <div style="margin:14px 0; color:var(--text-dim); font-size:11px; text-transform:uppercase; letter-spacing:.08em;">— o —</div>
   <button class="secondary" onclick="useLocalMode()">📱 Guardado local en este dispositivo</button>
-  <p style="margin-top:10px;">Sin login, sin Azure. Los conteos quedan guardados en inventarios separados en este celular — accedés a cualquiera cuando quieras y exportás a CSV para pasarlos al Excel.</p>
+  <p style="margin-top:10px;">Sin login, sin Azure. Los conteos quedan guardados en inventarios separados en este celular — accedés a cualquiera cuando quieras y exportás a XLSX (o CSV) para pasarlos al Excel.</p>
 </div>
 
 <main id="mainApp" style="display:none;">
@@ -217,7 +218,10 @@
   <div class="card">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
       <strong style="font-size:13px;">Log actual</strong>
-      <button class="ghost" onclick="exportCSV()">Exportar CSV</button>
+      <div>
+        <button class="ghost" onclick="exportXLSX()">Exportar XLSX</button>
+        <button class="ghost" onclick="exportCSV()">Exportar CSV</button>
+      </div>
     </div>
     <table id="logTable">
       <thead><tr><th>Código</th><th id="logCol2">Detalle</th><th>Excel</th></tr></thead>
@@ -244,7 +248,7 @@
     <p>Escaneás con la cámara del celu (usa el lector de códigos del navegador). Cada item se guarda en uno de dos modos, que elegís al entrar:</p>
     <ul style="margin:6px 0 0 18px; padding:0; color:var(--text-dim); font-size:13px; line-height:1.6;">
       <li><b style="color:var(--text);">Microsoft (OneDrive):</b> te logueás con tu cuenta personal de Microsoft y cada item se escribe directo en tu Excel de OneDrive (vía Microsoft Graph). Necesita cargar el Client ID de tu app de Azure en ⚙.</li>
-      <li><b style="color:var(--text);">Local en el celular:</b> sin login ni Azure. Los conteos quedan guardados en este dispositivo, en inventarios separados, y los exportás a CSV cuando quieras.</li>
+      <li><b style="color:var(--text);">Local en el celular:</b> sin login ni Azure. Los conteos quedan guardados en este dispositivo, en inventarios separados, y los exportás a XLSX o CSV cuando quieras.</li>
     </ul>
 
     <div style="font-weight:600; color:var(--amber); font-size:13px; margin:14px 0 4px;">Cada función</div>
@@ -253,7 +257,8 @@
       <li><b style="color:var(--text);">Ingresar manualmente:</b> si el código no lee, lo tipeás a mano.</li>
       <li><b style="color:var(--text);">Formulario:</b> tras capturar el código completás los campos (los definís en ⚙). Si tenés un campo "Producto" y cargaste el catálogo, se autocompleta solo.</li>
       <li><b style="color:var(--text);">Log actual:</b> lista lo escaneado en la sesión, con el estado de cada uno (en Excel / guardado local / pendiente / error).</li>
-      <li><b style="color:var(--text);">Exportar CSV:</b> baja todo lo de la sesión/inventario como archivo, listo para pasar al Excel.</li>
+      <li><b style="color:var(--text);">Exportar XLSX:</b> baja todo lo de la sesión/inventario como planilla Excel real, con columnas separadas y sin problemas de acentos — es la opción recomendada.</li>
+      <li><b style="color:var(--text);">Exportar CSV:</b> igual que el XLSX pero en texto plano, por si necesitás pegarlo en otro sistema. Ojo: abierto en Excel con configuración regional Argentina puede aparecer todo en una sola columna (usar "Datos &gt; Texto en columnas" con separador coma para arreglarlo).</li>
       <li><b style="color:var(--text);">⚙ Configuración:</b> Client ID de Azure, ruta del Excel en OneDrive, nombre de la tabla, campos del formulario y catálogo (código,producto).</li>
       <li><b style="color:var(--text);">Inventarios (modo local):</b> cada conteo se guarda por separado; volvés a cualquiera cuando quieras.</li>
     </ul>
@@ -968,6 +973,24 @@ function updateLogView(){
     tr.innerHTML = `<td class="num">${it.codigo}</td><td>${detalle}</td><td><span class="badge ${badgeClass}">${it.enviado}</span></td>`;
     body.appendChild(tr);
   });
+}
+
+function exportXLSX(){
+  if(sessionLog.length === 0){ showToast("No hay items para exportar", "bad"); return; }
+  const headers = ["fecha","codigo", ...customFields.map(slugify), "enviado"];
+  const displayHeaders = ["fecha","codigo", ...customFields, "enviado"];
+  const filas = sessionLog.map(it => {
+    const obj = {};
+    headers.forEach((h, i) => { obj[displayHeaders[i]] = (it[h] !== undefined && it[h] !== null) ? it[h] : ""; });
+    return obj;
+  });
+  const ws = XLSX.utils.json_to_sheet(filas, { header: displayHeaders });
+  ws['!cols'] = displayHeaders.map(h => ({ wch: Math.max(h.length + 2, 14) }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Conteo');
+  const inv = localMode ? inventarios.find(i => i.id === activeInvId) : null;
+  const namePart = inv ? slugify(inv.name) : "sesion";
+  XLSX.writeFile(wb, "coraz-stock-" + namePart + "-" + new Date().toISOString().slice(0,10) + ".xlsx", { bookType: 'xlsx' });
 }
 
 function exportCSV(){
