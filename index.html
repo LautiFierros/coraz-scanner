@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>CORAZ · Control de Stock</title>
 <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.7.0/lib/msal-browser.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
     --bg: #14120f;
@@ -77,40 +76,6 @@
   }
   #scanArea .hint{position:absolute; bottom:8px; left:0; right:0; text-align:center; font-size:12px; color:#fff;}
 
-  /* --- Selección de código entre varios --- */
-  #scanOverlay{position:absolute; inset:0; pointer-events:none;}
-  #scanOverlay .bbox{
-    position:absolute; border:2px solid rgba(242,237,226,.85); border-radius:6px;
-    pointer-events:auto; background:transparent; transition:border-color .08s;
-  }
-  #scanOverlay .bbox.sel{
-    border-color:var(--ok); border-width:3px;
-    box-shadow:0 0 0 2px rgba(74,157,95,.35); background:rgba(74,157,95,.10);
-  }
-  #scanOverlay .bbox .tag{
-    position:absolute; left:-2px; bottom:100%; margin-bottom:5px;
-    background:var(--ok); color:#0d1a10; border-radius:5px; font-weight:700;
-    font-family:"SF Mono","Consolas",monospace; font-size:12px; padding:3px 7px;
-    white-space:nowrap; max-width:70vw; overflow:hidden; text-overflow:ellipsis;
-    box-shadow:0 2px 6px rgba(0,0,0,.4);
-  }
-  #scanCount{
-    position:absolute; top:8px; left:50%; transform:translateX(-50%);
-    background:rgba(20,18,15,.85); border:1px solid var(--line); color:var(--text);
-    font-size:11px; padding:4px 11px; border-radius:99px; display:none; white-space:nowrap;
-  }
-  #scanCount.show{display:block;}
-  #confirmBar{
-    position:absolute; left:8px; right:8px; bottom:8px; z-index:5;
-    display:none; align-items:center; gap:8px;
-    background:rgba(20,18,15,.92); border:1px solid var(--line);
-    border-radius:10px; padding:8px 10px;
-  }
-  #confirmBar.show{display:flex;}
-  #confirmBar .cbCode{flex:1; font-family:"SF Mono","Consolas",monospace; font-size:15px; color:var(--amber); word-break:break-all;}
-  #confirmBar .cbBtn{background:var(--ok); color:#0d1a10; border:none; font-weight:700; padding:12px 16px; border-radius:8px; font-size:14px; white-space:nowrap;}
-  #confirmBar .cbBtn:active{opacity:.85;}
-
   .badge{display:inline-block; font-size:10px; padding:3px 8px; border-radius:99px; text-transform:uppercase; letter-spacing:.05em;}
   .badge.ok{background:rgba(74,157,95,.18); color:var(--ok);}
   .badge.bad{background:rgba(193,75,58,.18); color:var(--bad);}
@@ -143,6 +108,10 @@
   .invItem .actions{display:flex; gap:6px; align-items:center;}
   .invItem button.use{background:var(--panel-2); border:1px solid var(--line); color:var(--text); padding:7px 12px; border-radius:6px; font-size:12px;}
 
+  .diffRow{display:flex; justify-content:space-between; font-size:12.5px; padding:6px 0; border-bottom:1px solid var(--line);}
+  .diffRow .d-pos{color:var(--ok);}
+  .diffRow .d-neg{color:var(--bad);}
+
   footer.tabs{
     position:fixed; bottom:0; left:0; right:0; background:var(--panel); border-top:1px solid var(--line);
     display:flex; padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
@@ -158,10 +127,7 @@
     <h1>CORAZ · Stock</h1>
     <div class="sub" id="countSub">0 items cargados en esta sesión</div>
   </div>
-  <div style="display:flex; gap:2px;">
-    <button id="gear" onclick="openModal('funcionamiento')" title="Cómo funciona la app">?</button>
-    <button id="gear" onclick="openModal('config')" title="Configuración">⚙</button>
-  </div>
+  <button id="gear" onclick="openModal('config')">⚙</button>
 </header>
 
 <div id="authBar" style="display:none;">
@@ -180,7 +146,7 @@
   <button class="primary" onclick="login()">Iniciar sesión con Microsoft</button>
   <div style="margin:14px 0; color:var(--text-dim); font-size:11px; text-transform:uppercase; letter-spacing:.08em;">— o —</div>
   <button class="secondary" onclick="useLocalMode()">📱 Guardado local en este dispositivo</button>
-  <p style="margin-top:10px;">Sin login, sin Azure. Los conteos quedan guardados en inventarios separados en este celular — accedés a cualquiera cuando quieras y exportás a XLSX (o CSV) para pasarlos al Excel.</p>
+  <p style="margin-top:10px;">Escaneás sin login. Los conteos quedan en inventarios separados en este celular. Cuando termines, "Finalizar inventario" lo manda a la base central de CORAZ (ahí sí te va a pedir tu usuario).</p>
 </div>
 
 <main id="mainApp" style="display:none;">
@@ -189,13 +155,7 @@
     <div id="scanArea" style="display:none;">
       <video id="video" autoplay playsinline muted></video>
       <div class="frame"></div>
-      <div id="scanOverlay"></div>
-      <div id="scanCount"></div>
-      <div class="hint" id="scanHint">Apuntá al código de barras</div>
-      <div id="confirmBar">
-        <div class="cbCode" id="cbCode">—</div>
-        <button class="cbBtn" id="cbBtn" onclick="confirmSelected()">Confirmar ✓</button>
-      </div>
+      <div class="hint">Apuntá al código de barras</div>
     </div>
     <button class="primary" id="scanBtn" onclick="toggleScan()">📷 Escanear código</button>
     <div style="margin-top:8px;">
@@ -218,16 +178,17 @@
   <div class="card">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
       <strong style="font-size:13px;">Log actual</strong>
-      <div>
-        <button class="ghost" onclick="exportXLSX()">Exportar XLSX</button>
-        <button class="ghost" onclick="exportCSV()">Exportar CSV</button>
-      </div>
+      <button class="ghost" onclick="exportCSV()">Exportar CSV</button>
     </div>
     <table id="logTable">
-      <thead><tr><th>Código</th><th id="logCol2">Detalle</th><th>Excel</th></tr></thead>
+      <thead><tr><th>Código</th><th id="logCol2">Detalle</th><th>Estado</th></tr></thead>
       <tbody id="logBody"></tbody>
     </table>
     <div id="emptyLog" style="color:var(--text-dim); font-size:13px; padding:10px 0;">Todavía no escaneaste nada.</div>
+    <div id="finalizarBox" style="margin-top:12px; display:none;">
+      <button class="primary" onclick="openModal('finalizar')">✅ Finalizar inventario</button>
+      <div class="hint" style="margin-top:6px;">Manda este inventario a la base central de CORAZ (crea el conteo físico para revisar diferencias). Necesita tu usuario de CORAZ.</div>
+    </div>
   </div>
 
 </main>
@@ -238,43 +199,11 @@
 
 <div id="toast"></div>
 
-<!-- Modal: funcionamiento de la app -->
-<div class="modal-backdrop" id="modal-funcionamiento">
-  <div class="modal">
-    <h2>Funcionamiento de la app</h2>
-    <p style="color:var(--text); margin-bottom:12px;">Herramienta para contar stock desde el celular escaneando el código de barras y que los datos caigan solos en tu Excel.</p>
-
-    <div style="font-weight:600; color:var(--amber); font-size:13px; margin:14px 0 4px;">¿De dónde salen y a dónde van los datos?</div>
-    <p>Escaneás con la cámara del celu (usa el lector de códigos del navegador). Cada item se guarda en uno de dos modos, que elegís al entrar:</p>
-    <ul style="margin:6px 0 0 18px; padding:0; color:var(--text-dim); font-size:13px; line-height:1.6;">
-      <li><b style="color:var(--text);">Microsoft (OneDrive):</b> te logueás con tu cuenta personal de Microsoft y cada item se escribe directo en tu Excel de OneDrive (vía Microsoft Graph). Necesita cargar el Client ID de tu app de Azure en ⚙.</li>
-      <li><b style="color:var(--text);">Local en el celular:</b> sin login ni Azure. Los conteos quedan guardados en este dispositivo, en inventarios separados, y los exportás a XLSX o CSV cuando quieras.</li>
-    </ul>
-
-    <div style="font-weight:600; color:var(--amber); font-size:13px; margin:14px 0 4px;">Cada función</div>
-    <ul style="margin:6px 0 0 18px; padding:0; color:var(--text-dim); font-size:13px; line-height:1.6;">
-      <li><b style="color:var(--text);">📷 Escanear código:</b> abre la cámara. Si hay varios códigos en pantalla, tocás el correcto y confirmás.</li>
-      <li><b style="color:var(--text);">Ingresar manualmente:</b> si el código no lee, lo tipeás a mano.</li>
-      <li><b style="color:var(--text);">Formulario:</b> tras capturar el código completás los campos (los definís en ⚙). Si tenés un campo "Producto" y cargaste el catálogo, se autocompleta solo.</li>
-      <li><b style="color:var(--text);">Log actual:</b> lista lo escaneado en la sesión, con el estado de cada uno (en Excel / guardado local / pendiente / error).</li>
-      <li><b style="color:var(--text);">Exportar XLSX:</b> baja todo lo de la sesión/inventario como planilla Excel real, con columnas separadas y sin problemas de acentos — es la opción recomendada.</li>
-      <li><b style="color:var(--text);">Exportar CSV:</b> igual que el XLSX pero en texto plano, por si necesitás pegarlo en otro sistema. Ojo: abierto en Excel con configuración regional Argentina puede aparecer todo en una sola columna (usar "Datos &gt; Texto en columnas" con separador coma para arreglarlo).</li>
-      <li><b style="color:var(--text);">⚙ Configuración:</b> Client ID de Azure, ruta del Excel en OneDrive, nombre de la tabla, campos del formulario y catálogo (código,producto).</li>
-      <li><b style="color:var(--text);">Inventarios (modo local):</b> cada conteo se guarda por separado; volvés a cualquiera cuando quieras.</li>
-    </ul>
-
-    <div style="font-weight:600; color:var(--amber); font-size:13px; margin:14px 0 4px;">Si algo falla</div>
-    <p>Si un guardado a Excel falla, el item queda igual en el log y se marca "error": nunca perdés lo escaneado, siempre podés exportar a CSV y subirlo a mano. El guardado reintenta solo una vez ante un problema de red antes de marcar error.</p>
-
-    <button class="primary" onclick="closeModal('funcionamiento')" style="margin-top:16px;">Entendido</button>
-  </div>
-</div>
-
 <!-- Modal: config -->
 <div class="modal-backdrop" id="modal-config">
   <div class="modal">
     <h2>Configuración</h2>
-    <p>Estos tres datos salen de tu app registrada en Azure (portal.azure.com → Entra ID → App registrations) y de tu archivo real en OneDrive.</p>
+    <p>Estos tres datos salen de tu app registrada en Azure (portal.azure.com → Entra ID → App registrations) y de tu archivo real en OneDrive. Solo hacen falta si usás el modo "Iniciar sesión con Microsoft".</p>
     <div class="field">
       <label>Client ID (de tu app en Azure)</label>
       <input id="cfgClientId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
@@ -287,12 +216,11 @@
     <div class="field">
       <label>Nombre de la tabla en Excel</label>
       <input id="cfgTable" placeholder="Tabla1">
-      <div class="hint">Lo ves en Excel: clic en la tabla → pestaña "Diseño de tabla" → "Nombre de tabla"</div>
     </div>
     <div class="field">
       <label>Campos del formulario (uno por línea)</label>
       <textarea id="cfgFields" style="min-height:110px;"></textarea>
-      <div class="hint">Además del Código (fijo). Agregá una línea = un campo nuevo. Borrá una línea = lo elimina. Editá el texto = lo renombra. El orden acá tiene que ser el mismo orden de columnas en tu tabla de Excel: primero Fecha, después Código, y después estos campos en este orden.</div>
+      <div class="hint">Además del Código (fijo). Para que "Finalizar inventario" funcione, uno de estos campos tiene que tener "cantidad" en el nombre (ej: "Cantidad contada"), y opcionalmente otro con "estado" (valores Bueno/Dañado/Faltante) — "Faltante" se manda como no-escaneado.</div>
     </div>
     <div class="field">
       <label>Catálogo (pegar CSV: codigo,producto — una línea por producto)</label>
@@ -338,6 +266,33 @@
   </div>
 </div>
 
+<!-- Modal: finalizar inventario (envío a Supabase) -->
+<div class="modal-backdrop" id="modal-finalizar">
+  <div class="modal">
+    <h2>Finalizar inventario</h2>
+    <div id="finalizarLoginSection">
+      <p>Iniciá sesión con tu usuario de CORAZ para mandar este inventario a la base central.</p>
+      <div class="field">
+        <label>Email</label>
+        <input id="sbEmail" type="email" placeholder="tu@corazautopartes.com">
+      </div>
+      <div class="field">
+        <label>Contraseña</label>
+        <input id="sbPassword" type="password">
+      </div>
+      <button class="primary" onclick="loginSupabaseAndFinalize()">Iniciar sesión y finalizar</button>
+    </div>
+    <div id="finalizarConfirmSection" style="display:none;">
+      <p id="finalizarSummary"></p>
+      <button class="primary" onclick="enviarFinalizacion()">Confirmar y enviar</button>
+    </div>
+    <div id="finalizarResultSection" style="display:none;"></div>
+    <div style="margin-top:8px;">
+      <button class="ghost" onclick="closeModal('finalizar')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 let stream = null;
 let scanning = false;
@@ -345,14 +300,6 @@ let detector = null;
 let catalog = {}; // codigo -> producto
 let sessionLog = []; // items del inventario activo
 let detectLoop = null;
-
-// --- Selección entre varios códigos ---
-let currentCodes = [];      // [{value, box:{x,y,width,height}}] del último frame
-let selectedValue = null;   // rawValue del código elegido
-let userPicked = false;     // true si el usuario tocó uno a mano
-let boxEls = {};            // value -> elemento del recuadro (reuso para no perder taps)
-let lastDetectTs = 0;       // throttle de detección
-const DETECT_INTERVAL = 90; // ms entre detecciones (~11 fps)
 
 let clientId = "";
 let filePath = "";
@@ -362,13 +309,21 @@ let account = null;
 let localMode = false;
 let customFields = ["Producto", "Cantidad contada", "Ubicación", "Estado", "Notas"];
 
-let inventarios = []; // [{id, name, createdAt}]
+let inventarios = []; // [{id, name, createdAt, finalizado, conteoId}]
 let activeInvId = null;
+
+// --- Conexión a la base central de CORAZ (Supabase) ---
+const SUPABASE_URL = "https://kvewsxrfogosjwehookj.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt2ZXdzeHJmb2dvc2p3ZWhvb2tqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU3OTA2OTksImV4cCI6MjEwMTM2NjY5OX0.6oyDPFG_8hAAULXCUn6uO7C-abxMSOxxMFFJ_xBFZHY";
+let sbAccessToken = null;
+let sbRefreshToken = null;
+let sbExpiresAt = 0;
 
 const STORAGE_KEY = 'coraz-scanner-config';
 const LOCAL_MODE_KEY = 'coraz-scanner-localmode';
 const INV_LIST_KEY = 'coraz-scanner-inventarios';
 const ACTIVE_INV_KEY = 'coraz-scanner-active-inv';
+const SB_SESSION_KEY = 'coraz-scanner-sb-session';
 const GRAPH_SCOPES = ["Files.ReadWrite"];
 
 function invItemsKey(id){ return 'coraz-scanner-inv-items-' + id; }
@@ -379,25 +334,13 @@ function slugify(label){
     .replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "campo";
 }
 
-// fetch con timeout (AbortController) y reintento automatico ante red/5xx.
-async function fetchConReintento(url, opciones = {}, { timeout = 15000, reintentos = 1 } = {}){
-  let ultimoError;
-  for(let intento = 0; intento <= reintentos; intento++){
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeout);
-    try{
-      const resp = await fetch(url, { ...opciones, signal: controller.signal });
-      clearTimeout(timer);
-      if(resp.status >= 500 && intento < reintentos){ ultimoError = new Error("HTTP " + resp.status); await new Promise(r => setTimeout(r, 600 * (intento + 1))); continue; }
-      return resp;
-    }catch(e){
-      clearTimeout(timer);
-      ultimoError = (e && e.name === "AbortError") ? new Error("timeout: la conexion tardo demasiado") : e;
-      if(intento < reintentos){ await new Promise(r => setTimeout(r, 600 * (intento + 1))); continue; }
-      throw ultimoError;
+function findFieldValue(item, pattern){
+  for(const label of customFields){
+    if(pattern.test(label)){
+      return item[slugify(label)];
     }
   }
-  throw ultimoError;
+  return undefined;
 }
 
 async function init(){
@@ -414,6 +357,14 @@ async function init(){
       }
     }
   }catch(e){ /* no config yet */ }
+
+  try{
+    const raw = localStorage.getItem(SB_SESSION_KEY);
+    if(raw){
+      const s = JSON.parse(raw);
+      sbAccessToken = s.access_token; sbRefreshToken = s.refresh_token; sbExpiresAt = s.expires_at;
+    }
+  }catch(e){}
 
   if("BarcodeDetector" in window){
     try{
@@ -433,13 +384,13 @@ async function init(){
     loadActiveInvItems();
     updateAuthUI();
   } else if(clientId){
-    try{ await setupMsal(); }
-    catch(e){ /* MSAL no cargó: el gate queda visible, el usuario puede reintentar o ir a modo local */ }
+    await setupMsal();
   }
   updateLogView();
 }
 init();
 
+// ---------- Inventarios (modo local) ----------
 function loadInventariosList(){
   try{
     const raw = localStorage.getItem(INV_LIST_KEY);
@@ -462,7 +413,7 @@ function saveActiveInvItems(){
 }
 
 function createInventarioInternal(name){
-  const inv = {id: 'inv_' + Date.now(), name: name, createdAt: new Date().toISOString()};
+  const inv = {id: 'inv_' + Date.now(), name: name, createdAt: new Date().toISOString(), finalizado: false, conteoId: null};
   inventarios.unshift(inv);
   saveInventariosList();
   localStorage.setItem(invItemsKey(inv.id), JSON.stringify([]));
@@ -517,10 +468,11 @@ function renderInvList(){
     const row = document.createElement('div');
     row.className = 'invItem' + (inv.id === activeInvId ? ' active' : '');
     const date = new Date(inv.createdAt).toLocaleDateString('es-AR');
+    const finalTag = inv.finalizado ? ' · ✅ finalizado' : '';
     row.innerHTML = `
       <div class="info">
         <div class="n">${inv.name}</div>
-        <div class="d">${date} · ${count} item${count === 1 ? '' : 's'}</div>
+        <div class="d">${date} · ${count} item${count === 1 ? '' : 's'}${finalTag}</div>
       </div>
       <div class="actions">
         <button class="use" data-id="${inv.id}">${inv.id === activeInvId ? 'Activo' : 'Usar'}</button>
@@ -550,11 +502,8 @@ function useLocalMode(){
   updateLogView();
 }
 
+// ---------- Microsoft / Excel ----------
 async function setupMsal(){
-  if(typeof msal === "undefined"){
-    showToast("No se pudo cargar el módulo de Microsoft. Revisá tu conexión y recargá, o usá el guardado local.", "bad");
-    throw new Error("MSAL no disponible (CDN no cargó)");
-  }
   msalInstance = new msal.PublicClientApplication({
     auth: {
       clientId: clientId,
@@ -607,8 +556,8 @@ async function login(){
     openModal('config');
     return;
   }
+  if(!msalInstance) await setupMsal();
   try{
-    if(!msalInstance) await setupMsal();
     await msalInstance.loginRedirect({scopes: GRAPH_SCOPES});
   }catch(e){
     showToast("No se pudo iniciar sesión: " + e.message, "bad");
@@ -640,6 +589,7 @@ async function getGraphToken(){
   }
 }
 
+// ---------- Modales ----------
 function openModal(name){
   if(name === 'config'){
     document.getElementById('cfgClientId').value = clientId;
@@ -650,6 +600,20 @@ function openModal(name){
   }
   if(name === 'inventarios'){
     renderInvList();
+  }
+  if(name === 'finalizar'){
+    document.getElementById('finalizarResultSection').style.display = 'none';
+    document.getElementById('finalizarResultSection').innerHTML = '';
+    if(sbAccessToken && Date.now() < sbExpiresAt){
+      document.getElementById('finalizarLoginSection').style.display = 'none';
+      document.getElementById('finalizarConfirmSection').style.display = 'block';
+      const inv = inventarios.find(i => i.id === activeInvId);
+      document.getElementById('finalizarSummary').textContent =
+        'Vas a finalizar "' + (inv ? inv.name : '') + '" con ' + sessionLog.length + ' items. Esto crea el conteo físico en la base de CORAZ para revisión.';
+    } else {
+      document.getElementById('finalizarLoginSection').style.display = 'block';
+      document.getElementById('finalizarConfirmSection').style.display = 'none';
+    }
   }
   document.getElementById('modal-'+name).classList.add('show');
 }
@@ -692,6 +656,7 @@ async function saveConfig(){
   }
 }
 
+// ---------- Escaneo ----------
 async function toggleScan(){
   if(scanning){ stopScan(); return; }
   if(!detector){
@@ -705,8 +670,6 @@ async function toggleScan(){
     document.getElementById('scanArea').style.display = 'block';
     document.getElementById('scanBtn').textContent = "⏹ Detener cámara";
     scanning = true;
-    currentCodes = []; selectedValue = null; userPicked = false; boxEls = {}; lastDetectTs = 0;
-    document.getElementById('scanHint').textContent = "Apuntá al código de barras";
     detectLoop = requestAnimationFrame(scanFrame);
   }catch(e){
     showToast("No se pudo acceder a la cámara. Revisá permisos del navegador.", "bad");
@@ -719,134 +682,22 @@ function stopScan(){
   if(stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; }
   document.getElementById('scanArea').style.display = 'none';
   document.getElementById('scanBtn').textContent = "📷 Escanear código";
-  // limpiar estado de selección
-  currentCodes = []; selectedValue = null; userPicked = false; boxEls = {};
-  const ov = document.getElementById('scanOverlay'); if(ov) ov.innerHTML = "";
-  const bar = document.getElementById('confirmBar'); if(bar) bar.classList.remove('show');
-  const cnt = document.getElementById('scanCount'); if(cnt) cnt.classList.remove('show');
 }
 
 async function scanFrame(){
   if(!scanning) return;
   const video = document.getElementById('video');
-  const now = performance.now();
-  if(now - lastDetectTs >= DETECT_INTERVAL){
-    lastDetectTs = now;
-    try{
-      const codes = await detector.detect(video);
-      currentCodes = codes
-        .filter(c => c.rawValue)
-        .map(c => ({
-          value: c.rawValue,
-          box: {x:c.boundingBox.x, y:c.boundingBox.y, width:c.boundingBox.width, height:c.boundingBox.height}
-        }));
-      updateSelection(video);
-      renderOverlay(video);
-    }catch(e){ /* seguir intentando */ }
-  }
-  detectLoop = requestAnimationFrame(scanFrame);
-}
-
-// Mapea la caja del código (píxeles del video) a píxeles en pantalla,
-// respetando object-fit:cover (escala + recorte centrado).
-function videoToDisplay(video, box){
-  const cw = video.clientWidth, ch = video.clientHeight;
-  const vw = video.videoWidth, vh = video.videoHeight;
-  if(!vw || !vh || !cw || !ch) return null;
-  const scale = Math.max(cw/vw, ch/vh);
-  const rw = vw*scale, rh = vh*scale;
-  const ox = (cw - rw)/2, oy = (ch - rh)/2;
-  return {left: box.x*scale + ox, top: box.y*scale + oy, width: box.width*scale, height: box.height*scale};
-}
-
-// Decide qué código queda seleccionado. La selección es "pegajosa":
-// si el código elegido sigue en pantalla, no cambia. Si no hay elegido,
-// toma el más cercano al centro (el que estás apuntando).
-function updateSelection(video){
-  if(currentCodes.length === 0){ selectedValue = null; userPicked = false; return; }
-  if(selectedValue && currentCodes.some(c => c.value === selectedValue)) return;
-  userPicked = false;
-  const cx = video.videoWidth/2, cy = video.videoHeight/2;
-  let best = null, bestD = Infinity;
-  currentCodes.forEach(c => {
-    const bx = c.box.x + c.box.width/2, by = c.box.y + c.box.height/2;
-    const d = (bx-cx)*(bx-cx) + (by-cy)*(by-cy);
-    if(d < bestD){ bestD = d; best = c; }
-  });
-  selectedValue = best ? best.value : null;
-}
-
-// Dibuja/actualiza los recuadros reutilizando los elementos existentes
-// (clave = valor) para que un tap no se pierda al re-renderizar.
-function renderOverlay(video){
-  const ov = document.getElementById('scanOverlay');
-  const frame = document.querySelector('#scanArea .frame');
-  if(frame) frame.style.display = currentCodes.length ? 'none' : 'block';
-  const seen = new Set();
-
-  currentCodes.forEach(c => {
-    const pos = videoToDisplay(video, c.box);
-    if(!pos) return;
-    seen.add(c.value);
-    let el = boxEls[c.value];
-    if(!el){
-      el = document.createElement('div');
-      el.className = 'bbox';
-      el.innerHTML = '<div class="tag"></div>';
-      el.addEventListener('click', () => selectCode(c.value));
-      ov.appendChild(el);
-      boxEls[c.value] = el;
+  try{
+    const codes = await detector.detect(video);
+    if(codes.length > 0){
+      const value = codes[0].rawValue;
+      if(navigator.vibrate) navigator.vibrate(80);
+      stopScan();
+      onCodeCaptured(value);
+      return;
     }
-    const isSel = c.value === selectedValue;
-    el.className = 'bbox' + (isSel ? ' sel' : '');
-    el.style.left = pos.left + 'px';
-    el.style.top = pos.top + 'px';
-    el.style.width = pos.width + 'px';
-    el.style.height = pos.height + 'px';
-    const tag = el.firstChild;
-    tag.textContent = isSel ? c.value : '';
-    tag.style.display = isSel ? 'block' : 'none';
-  });
-
-  // sacar los que ya no están
-  Object.keys(boxEls).forEach(v => {
-    if(!seen.has(v)){ boxEls[v].remove(); delete boxEls[v]; }
-  });
-
-  // barra de confirmar + hint + contador
-  const bar = document.getElementById('confirmBar');
-  const hint = document.getElementById('scanHint');
-  const cnt = document.getElementById('scanCount');
-  if(selectedValue){
-    document.getElementById('cbCode').textContent = selectedValue;
-    bar.classList.add('show');
-    hint.style.display = 'none';
-  } else {
-    bar.classList.remove('show');
-    hint.style.display = 'block';
-    hint.textContent = currentCodes.length ? 'Tocá el código para seleccionarlo' : 'Apuntá al código de barras';
-  }
-  if(currentCodes.length > 1){
-    cnt.textContent = currentCodes.length + ' códigos — tocá el correcto';
-    cnt.classList.add('show');
-  } else {
-    cnt.classList.remove('show');
-  }
-}
-
-function selectCode(value){
-  selectedValue = value;
-  userPicked = true;
-  if(navigator.vibrate) navigator.vibrate(15);
-  renderOverlay(document.getElementById('video'));
-}
-
-function confirmSelected(){
-  if(!selectedValue) return;
-  const value = selectedValue;
-  if(navigator.vibrate) navigator.vibrate(80);
-  stopScan();
-  onCodeCaptured(value);
+  }catch(e){ /* keep trying */ }
+  detectLoop = requestAnimationFrame(scanFrame);
 }
 
 function submitManual(){
@@ -929,14 +780,14 @@ async function saveItem(){
     const token = await getGraphToken();
     const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
     const url = `https://graph.microsoft.com/v1.0/me/drive/root:/${encodedPath}:/workbook/tables('${encodeURIComponent(tableName)}')/rows/add`;
-    const res = await fetchConReintento(url, {
+    const res = await fetch(url, {
       method: "POST",
       headers: {
         "Authorization": "Bearer " + token,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({values: [values]})
-    }, { timeout: 15000, reintentos: 1 });
+    });
     if(res.ok){
       item.enviado = "en Excel";
       showToast("Guardado en Excel (" + sessionLog.length + " en la sesión)", "ok");
@@ -961,6 +812,8 @@ function updateLogView(){
   const inv = localMode ? inventarios.find(i => i.id === activeInvId) : null;
   document.getElementById('countSub').textContent = (inv ? ('"' + inv.name + '" — ') : '') + sessionLog.length + " items";
   body.innerHTML = "";
+  const finalizarBox = document.getElementById('finalizarBox');
+  finalizarBox.style.display = (localMode && sessionLog.length > 0) ? 'block' : 'none';
   if(sessionLog.length === 0){ empty.style.display='block'; return; }
   empty.style.display='none';
   const firstKey = customFields[0] ? slugify(customFields[0]) : null;
@@ -973,24 +826,6 @@ function updateLogView(){
     tr.innerHTML = `<td class="num">${it.codigo}</td><td>${detalle}</td><td><span class="badge ${badgeClass}">${it.enviado}</span></td>`;
     body.appendChild(tr);
   });
-}
-
-function exportXLSX(){
-  if(sessionLog.length === 0){ showToast("No hay items para exportar", "bad"); return; }
-  const headers = ["fecha","codigo", ...customFields.map(slugify), "enviado"];
-  const displayHeaders = ["fecha","codigo", ...customFields, "enviado"];
-  const filas = sessionLog.map(it => {
-    const obj = {};
-    headers.forEach((h, i) => { obj[displayHeaders[i]] = (it[h] !== undefined && it[h] !== null) ? it[h] : ""; });
-    return obj;
-  });
-  const ws = XLSX.utils.json_to_sheet(filas, { header: displayHeaders });
-  ws['!cols'] = displayHeaders.map(h => ({ wch: Math.max(h.length + 2, 14) }));
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Conteo');
-  const inv = localMode ? inventarios.find(i => i.id === activeInvId) : null;
-  const namePart = inv ? slugify(inv.name) : "sesion";
-  XLSX.writeFile(wb, "coraz-stock-" + namePart + "-" + new Date().toISOString().slice(0,10) + ".xlsx", { bookType: 'xlsx' });
 }
 
 function exportCSV(){
@@ -1009,6 +844,136 @@ function exportCSV(){
   document.body.appendChild(a);
   a.click();
   a.remove();
+}
+
+// ---------- Finalizar inventario -> Supabase (stock-conteo-preview) ----------
+async function loginSupabaseAndFinalize(){
+  const email = document.getElementById('sbEmail').value.trim();
+  const password = document.getElementById('sbPassword').value;
+  if(!email || !password){ showToast("Completá email y contraseña", "bad"); return; }
+  try{
+    const res = await fetch(SUPABASE_URL + "/auth/v1/token?grant_type=password", {
+      method: "POST",
+      headers: {"apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json"},
+      body: JSON.stringify({email, password})
+    });
+    const data = await res.json();
+    if(!res.ok || !data.access_token){
+      showToast("Login incorrecto: " + (data.error_description || data.msg || res.status), "bad");
+      return;
+    }
+    sbAccessToken = data.access_token;
+    sbRefreshToken = data.refresh_token;
+    sbExpiresAt = Date.now() + (data.expires_in ? data.expires_in * 1000 : 3600000) - 30000;
+    localStorage.setItem(SB_SESSION_KEY, JSON.stringify({access_token: sbAccessToken, refresh_token: sbRefreshToken, expires_at: sbExpiresAt}));
+    document.getElementById('sbPassword').value = "";
+    openModal('finalizar');
+  }catch(e){
+    showToast("Error de conexión: " + e.message, "bad");
+  }
+}
+
+async function ensureSupabaseToken(){
+  if(sbAccessToken && Date.now() < sbExpiresAt) return sbAccessToken;
+  if(sbRefreshToken){
+    try{
+      const res = await fetch(SUPABASE_URL + "/auth/v1/token?grant_type=refresh_token", {
+        method: "POST",
+        headers: {"apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json"},
+        body: JSON.stringify({refresh_token: sbRefreshToken})
+      });
+      const data = await res.json();
+      if(res.ok && data.access_token){
+        sbAccessToken = data.access_token;
+        sbRefreshToken = data.refresh_token;
+        sbExpiresAt = Date.now() + (data.expires_in ? data.expires_in * 1000 : 3600000) - 30000;
+        localStorage.setItem(SB_SESSION_KEY, JSON.stringify({access_token: sbAccessToken, refresh_token: sbRefreshToken, expires_at: sbExpiresAt}));
+        return sbAccessToken;
+      }
+    }catch(e){}
+  }
+  sbAccessToken = null; sbRefreshToken = null; sbExpiresAt = 0;
+  localStorage.removeItem(SB_SESSION_KEY);
+  return null;
+}
+
+async function enviarFinalizacion(){
+  const token = await ensureSupabaseToken();
+  if(!token){
+    showToast("Se venció la sesión, iniciá sesión de nuevo", "bad");
+    document.getElementById('finalizarLoginSection').style.display = 'block';
+    document.getElementById('finalizarConfirmSection').style.display = 'none';
+    return;
+  }
+
+  const cantidadPattern = /cantidad/i;
+  const estadoPattern = /estado/i;
+  const hasCantidadField = customFields.some(l => cantidadPattern.test(l));
+  if(!hasCantidadField){
+    showToast('No encontré un campo de "Cantidad" en ⚙ Configuración. Agregalo para poder finalizar.', "bad");
+    return;
+  }
+
+  const filas = sessionLog.map(it=>{
+    const cantidadVal = findFieldValue(it, cantidadPattern);
+    const estadoVal = findFieldValue(it, estadoPattern);
+    return {
+      sku: it.codigo,
+      cantidad: (cantidadVal === undefined || cantidadVal === "") ? null : Number(cantidadVal),
+      estado: estadoVal ? String(estadoVal).toLowerCase() : undefined,
+      momento: it.fecha
+    };
+  });
+
+  document.getElementById('finalizarConfirmSection').style.display = 'none';
+  const resultSection = document.getElementById('finalizarResultSection');
+  resultSection.style.display = 'block';
+  resultSection.innerHTML = '<p>Enviando...</p>';
+
+  try{
+    const res = await fetch(SUPABASE_URL + "/functions/v1/stock-conteo-preview", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + token,
+        "apikey": SUPABASE_ANON_KEY,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({filas})
+    });
+    const data = await res.json();
+    if(!res.ok || !data.ok){
+      resultSection.innerHTML = '<p style="color:var(--bad);">Error: ' + (data.error || res.status) + '</p>';
+      return;
+    }
+
+    const inv = inventarios.find(i => i.id === activeInvId);
+    if(inv){
+      inv.finalizado = true;
+      inv.conteoId = data.conteo_id;
+      saveInventariosList();
+    }
+
+    let html = '<p><strong style="color:var(--ok);">Conteo creado.</strong> ' + data.total_contados + ' contados, ' + data.total_diferencias + ' con diferencia.</p>';
+    if(data.no_escaneados && data.no_escaneados.length){
+      html += '<p>No escaneados (Faltante): ' + data.no_escaneados.join(', ') + '</p>';
+    }
+    if(data.sin_match_en_sistema && data.sin_match_en_sistema.length){
+      html += '<p style="color:var(--amber);">Sin match en el sistema: ' + data.sin_match_en_sistema.join(', ') + '</p>';
+    }
+    if(data.diferencias && data.diferencias.length){
+      html += '<div style="margin-top:8px;">';
+      data.diferencias.slice(0, 15).forEach(d=>{
+        const cls = d.diferencia > 0 ? 'd-pos' : 'd-neg';
+        html += `<div class="diffRow"><span>${d.sku}${d.titulo ? ' — ' + d.titulo : ''}</span><span class="${cls}">${d.stock_sistema} → ${d.stock_contado} (${d.diferencia > 0 ? '+' : ''}${d.diferencia})</span></div>`;
+      });
+      html += '</div>';
+    }
+    resultSection.innerHTML = html;
+    updateLogView();
+    showToast("Inventario finalizado", "ok");
+  }catch(e){
+    resultSection.innerHTML = '<p style="color:var(--bad);">Error de conexión: ' + e.message + '</p>';
+  }
 }
 
 let toastTimer = null;
