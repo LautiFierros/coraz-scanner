@@ -146,7 +146,7 @@
   <button class="primary" onclick="login()">Iniciar sesión con Microsoft</button>
   <div style="margin:14px 0; color:var(--text-dim); font-size:11px; text-transform:uppercase; letter-spacing:.08em;">— o —</div>
   <button class="secondary" onclick="useLocalMode()">📱 Guardado local en este dispositivo</button>
-  <p style="margin-top:10px;">Escaneás sin login. Los conteos quedan en inventarios separados en este celular. Cuando termines, "Finalizar inventario" lo manda a la base central de CORAZ (ahí sí te va a pedir tu usuario).</p>
+  <p style="margin-top:10px;">Escaneás sin login. Los conteos quedan en inventarios separados en este celular. Cuando termines, "Guardar inventario" lo manda a la base central de CORAZ (ahí sí te va a pedir tu usuario).</p>
 </div>
 
 <main id="mainApp" style="display:none;">
@@ -186,7 +186,7 @@
     </table>
     <div id="emptyLog" style="color:var(--text-dim); font-size:13px; padding:10px 0;">Todavía no escaneaste nada.</div>
     <div id="finalizarBox" style="margin-top:12px; display:none;">
-      <button class="primary" onclick="openModal('finalizar')">✅ Finalizar inventario</button>
+      <button class="primary" onclick="openModal('finalizar')">✅ Guardar inventario</button>
       <div class="hint" style="margin-top:6px;">Manda este inventario a la base central de CORAZ (crea el conteo físico para revisar diferencias). Necesita tu usuario de CORAZ.</div>
     </div>
   </div>
@@ -220,7 +220,7 @@
     <div class="field">
       <label>Campos del formulario (uno por línea)</label>
       <textarea id="cfgFields" style="min-height:110px;"></textarea>
-      <div class="hint">Además del Código (fijo). Para que "Finalizar inventario" funcione, uno de estos campos tiene que tener "cantidad" en el nombre (ej: "Cantidad contada"), y opcionalmente otro con "estado" (valores Bueno/Dañado/Faltante) — "Faltante" se manda como no-escaneado.</div>
+      <div class="hint">Además del Código (fijo). Para que "Guardar inventario" funcione, uno de estos campos tiene que tener "cantidad" en el nombre (ej: "Cantidad contada"), y opcionalmente otro con "estado" (valores Bueno/Dañado/Faltante) — "Faltante" se manda como no-escaneado.</div>
     </div>
     <div class="field">
       <label>Catálogo (pegar CSV: codigo,producto — una línea por producto)</label>
@@ -269,7 +269,7 @@
 <!-- Modal: finalizar inventario (envío a Supabase) -->
 <div class="modal-backdrop" id="modal-finalizar">
   <div class="modal">
-    <h2>Finalizar inventario</h2>
+    <h2>Guardar inventario</h2>
     <div id="finalizarLoginSection">
       <p>Iniciá sesión con tu usuario de CORAZ para mandar este inventario a la base central.</p>
       <div class="field">
