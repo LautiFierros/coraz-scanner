@@ -188,10 +188,7 @@
       <tbody id="logBody"></tbody>
     </table>
     <div id="emptyLog" style="color:var(--text-dim); font-size:13px; padding:10px 0;">Todavía no escaneaste nada.</div>
-    <div id="finalizarBox" style="margin-top:12px; display:none;">
-      <button class="primary" onclick="openModal('finalizar')">✅ Guardar inventario</button>
-      <div class="hint" style="margin-top:6px;">Manda este inventario a la base central de CORAZ (crea el conteo físico para revisar diferencias). Necesita tu usuario de CORAZ.</div>
-    </div>
+    <div id="finalizarBox" style="margin-top:12px; display:none;"></div>
   </div>
 
 </main>
@@ -875,7 +872,21 @@ function updateLogView(){
   document.getElementById('countSub').textContent = (inv ? ('"' + inv.name + '" — ') : '') + sessionLog.length + " items";
   body.innerHTML = "";
   const finalizarBox = document.getElementById('finalizarBox');
-  finalizarBox.style.display = (localMode && sessionLog.length > 0) ? 'block' : 'none';
+  if(localMode && sessionLog.length > 0){
+    finalizarBox.style.display = 'block';
+    if(inv && inv.finalizado){
+      const fecha = inv.finalizadoAt ? new Date(inv.finalizadoAt).toLocaleString('es-AR') : '';
+      finalizarBox.innerHTML = `
+        <div class="hint" style="color:var(--amber); margin-bottom:8px;">⚠️ Este inventario ya se mandó a la base el ${fecha}. Volver a mandarlo crea un conteo duplicado.</div>
+        <button class="secondary" onclick="reenviarConfirmado()">Reenviar igual (no recomendado)</button>`;
+    } else {
+      finalizarBox.innerHTML = `
+        <button class="primary" onclick="openModal('finalizar')">✅ Guardar inventario</button>
+        <div class="hint" style="margin-top:6px;">Manda este inventario a la base central de CORAZ (crea el conteo físico para revisar diferencias). Necesita tu usuario de CORAZ.</div>`;
+    }
+  } else {
+    finalizarBox.style.display = 'none';
+  }
   if(sessionLog.length === 0){ empty.style.display='block'; return; }
   empty.style.display='none';
   const firstKey = customFields[0] ? slugify(customFields[0]) : null;
@@ -959,6 +970,14 @@ async function ensureSupabaseToken(){
   return null;
 }
 
+function reenviarConfirmado(){
+  const inv = inventarios.find(i => i.id === activeInvId);
+  const fecha = inv && inv.finalizadoAt ? new Date(inv.finalizadoAt).toLocaleString('es-AR') : '';
+  const ok = confirm('Este inventario ya se mandó a la base el ' + fecha + '. Reenviarlo va a crear OTRO conteo con los mismos datos, duplicado. ¿Confirmás que querés hacerlo igual?');
+  if(!ok) return;
+  openModal('finalizar');
+}
+
 async function enviarFinalizacion(){
   const token = await ensureSupabaseToken();
   if(!token){
@@ -1012,6 +1031,7 @@ async function enviarFinalizacion(){
     if(inv){
       inv.finalizado = true;
       inv.conteoId = data.conteo_id;
+      inv.finalizadoAt = new Date().toISOString();
       saveInventariosList();
     }
 
