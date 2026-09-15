@@ -154,31 +154,45 @@
 
 <main id="mainApp" style="display:none;">
 
-  <div class="card" id="scanCard">
-    <div id="scanArea" style="display:none;">
-      <video id="video" autoplay playsinline muted></video>
-      <div class="frame"></div>
-      <div class="hint">Apuntá al código de barras</div>
-    </div>
-    <button class="primary" id="scanBtn" onclick="toggleScan()">📷 Escanear código</button>
-    <div style="margin-top:8px;">
-      <button class="ghost" onclick="openModal('manual')">Ingresar código manualmente</button>
-    </div>
-  </div>
-
-  <div class="card" id="formCard" style="display:none;">
+  <div class="card" id="invGate" style="display:none;">
+    <p style="color:var(--text-dim); font-size:13px; margin-bottom:14px;">¿Qué querés hacer?</p>
     <div class="field">
-      <label>Código escaneado</label>
-      <div class="code-display" id="currentCode">—</div>
+      <label>Nombre del inventario nuevo</label>
+      <input id="gateNewInvName" placeholder="Ej: Conteo depósito - hoy">
     </div>
-    <div id="dynamicFieldsContainer"></div>
-    <button class="primary" onclick="saveItem()">Guardar y continuar escaneando</button>
-    <div style="margin-top:8px;">
-      <button class="ghost" onclick="cancelForm()">Cancelar</button>
+    <button class="primary" onclick="confirmarNuevoInventario()">✅ Comenzar un nuevo inventario</button>
+    <div style="margin-top:10px;">
+      <button class="ghost" onclick="openModal('inventarios')">Continuar un inventario existente</button>
     </div>
   </div>
 
-  <div class="card">
+  <div id="scanningArea" style="display:none;">
+    <div class="card" id="scanCard">
+      <div id="scanArea" style="display:none;">
+        <video id="video" autoplay playsinline muted></video>
+        <div class="frame"></div>
+        <div class="hint">Apuntá al código de barras</div>
+      </div>
+      <button class="primary" id="scanBtn" onclick="toggleScan()">📷 Escanear código</button>
+      <div style="margin-top:8px;">
+        <button class="ghost" onclick="openModal('manual')">Ingresar código manualmente</button>
+      </div>
+    </div>
+
+    <div class="card" id="formCard" style="display:none;">
+      <div class="field">
+        <label>Código escaneado</label>
+        <div class="code-display" id="currentCode">—</div>
+      </div>
+      <div id="dynamicFieldsContainer"></div>
+      <button class="primary" onclick="saveItem()">Guardar y continuar escaneando</button>
+      <div style="margin-top:8px;">
+        <button class="ghost" onclick="cancelForm()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="logCardWrap" style="display:none;">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
       <strong style="font-size:13px;">Log actual</strong>
       <button class="ghost" onclick="exportCSV()">Exportar CSV</button>
@@ -188,10 +202,15 @@
       <tbody id="logBody"></tbody>
     </table>
     <div id="emptyLog" style="color:var(--text-dim); font-size:13px; padding:10px 0;">Todavía no escaneaste nada.</div>
+    <div id="cerrarBox" style="margin-top:10px; display:none;">
+      <button class="secondary" onclick="cerrarInventario()">🔒 Cerrar inventario</button>
+      <div class="hint" style="margin-top:6px;">Deja de aceptar escaneos nuevos en este inventario y habilita mandarlo a la base.</div>
+    </div>
     <div id="finalizarBox" style="margin-top:12px; display:none;"></div>
   </div>
 
 </main>
+
 
 <footer class="tabs">
   <button class="active">Escanear</button>
@@ -205,17 +224,18 @@
     <h2>Funcionamiento de la app</h2>
     <p style="color:var(--text); margin-bottom:12px;">Contás stock desde el celular escaneando el código de barras. Escaneás sin login; al terminar, mandás el conteo a la base central de CORAZ para revisar diferencias.</p>
 
-    <div style="font-weight:600; color:var(--amber); font-size:13px; margin:14px 0 4px;">El flujo en 3 pasos</div>
+    <div style="font-weight:600; color:var(--amber); font-size:13px; margin:14px 0 4px;">El flujo en modo local</div>
     <ol style="margin:6px 0 0 18px; padding:0; color:var(--text-dim); font-size:13px; line-height:1.6;">
-      <li><b style="color:var(--text);">Escaneás:</b> apuntás la cámara al código (usa el lector del navegador) o lo cargás a mano. Completás los campos (los definís en ⚙) y "Guardar y continuar".</li>
-      <li><b style="color:var(--text);">Se va guardando:</b> cada item queda en el <b>Log actual</b>. Según el modo, va a tu Excel de OneDrive, o local en el celu.</li>
-      <li><b style="color:var(--text);">Guardás el inventario:</b> el botón <b>✅ Guardar inventario</b> manda todo lo contado a la base central de CORAZ (crea el "conteo físico"). Ahí sí te pide tu <b>usuario de CORAZ</b>. Después revisás las diferencias en el panel de stock.</li>
+      <li><b style="color:var(--text);">Comenzás un inventario:</b> al entrar, la app SIEMPRE te pregunta si querés arrancar uno nuevo o continuar uno existente — nunca sigue solo con lo que quedó de la vez anterior, justo para evitar mandar datos viejos por error.</li>
+      <li><b style="color:var(--text);">Escaneás:</b> apuntás la cámara al código o lo cargás a mano. Completás los campos (los definís en ⚙) y "Guardar y continuar".</li>
+      <li><b style="color:var(--text);">Cerrás el inventario:</b> cuando terminaste de contar, tocás <b>🔒 Cerrar inventario</b>. Deja de aceptar escaneos nuevos ahí (se puede reabrir si te equivocaste).</li>
+      <li><b style="color:var(--text);">Lo guardás:</b> recién con el inventario cerrado aparece <b>✅ Guardar inventario</b>, que lo manda a la base central de CORAZ (crea el "conteo físico", te pide tu usuario). Si ya lo habías mandado antes, te avisa y pide confirmar de nuevo antes de duplicarlo.</li>
     </ol>
 
     <div style="font-weight:600; color:var(--amber); font-size:13px; margin:14px 0 4px;">Modos de guardado del escaneo</div>
     <ul style="margin:6px 0 0 18px; padding:0; color:var(--text-dim); font-size:13px; line-height:1.6;">
-      <li><b style="color:var(--text);">Microsoft (OneDrive):</b> cada item se escribe directo en tu Excel de OneDrive (vía Microsoft Graph). Necesita cargar el Client ID de Azure en ⚙.</li>
-      <li><b style="color:var(--text);">Local en el celular:</b> sin login ni Azure. Los conteos quedan en inventarios separados en este dispositivo; los exportás a CSV o los mandás a CORAZ con "Guardar inventario".</li>
+      <li><b style="color:var(--text);">Microsoft (OneDrive):</b> cada item se escribe directo en tu Excel de OneDrive (vía Microsoft Graph). Necesita cargar el Client ID de Azure en ⚙. No usa el paso de "Cerrar" — cada item se manda al toque.</li>
+      <li><b style="color:var(--text);">Local en el celular:</b> sin login ni Azure. Los conteos quedan en inventarios separados en este dispositivo; los exportás a CSV o los mandás a CORAZ con el flujo de arriba.</li>
     </ul>
 
     <div style="font-weight:600; color:var(--amber); font-size:13px; margin:14px 0 4px;">Botones y ⚙ Configuración</div>
@@ -340,6 +360,7 @@ let tableName = "";
 let msalInstance = null;
 let account = null;
 let localMode = false;
+let appStarted = false; // se resetea en cada carga de la app; obliga a confirmar antes de escanear
 let customFields = ["Producto", "Cantidad contada", "Ubicación", "Estado", "Notas"];
 
 let inventarios = []; // [{id, name, createdAt, finalizado, conteoId}]
@@ -468,7 +489,7 @@ function saveActiveInvItems(){
 }
 
 function createInventarioInternal(name){
-  const inv = {id: 'inv_' + Date.now(), name: name, createdAt: new Date().toISOString(), finalizado: false, conteoId: null};
+  const inv = {id: 'inv_' + Date.now(), name: name, createdAt: new Date().toISOString(), finalizado: false, conteoId: null, cerrado: false};
   inventarios.unshift(inv);
   saveInventariosList();
   localStorage.setItem(invItemsKey(inv.id), JSON.stringify([]));
@@ -490,8 +511,18 @@ function switchInventario(id){
   activeInvId = id;
   localStorage.setItem(ACTIVE_INV_KEY, id);
   loadActiveInvItems();
+  appStarted = true;
   updateAuthUI();
   updateLogView();
+}
+
+function confirmarNuevoInventario(){
+  const nameInput = document.getElementById('gateNewInvName');
+  const name = nameInput.value.trim() || ("Conteo " + new Date().toLocaleDateString('es-AR'));
+  const inv = createInventarioInternal(name);
+  nameInput.value = "";
+  switchInventario(inv.id);
+  showToast("Inventario \"" + name + "\" iniciado", "ok");
 }
 
 function deleteInventario(id, evt){
@@ -523,7 +554,7 @@ function renderInvList(){
     const row = document.createElement('div');
     row.className = 'invItem' + (inv.id === activeInvId ? ' active' : '');
     const date = new Date(inv.createdAt).toLocaleDateString('es-AR');
-    const finalTag = inv.finalizado ? ' · ✅ finalizado' : '';
+    const finalTag = inv.finalizado ? ' · ✅ finalizado' : (inv.cerrado ? ' · 🔒 cerrado' : ' · abierto');
     row.innerHTML = `
       <div class="info">
         <div class="n">${inv.name}</div>
@@ -588,20 +619,36 @@ function updateAuthUI(){
   const app = document.getElementById('mainApp');
   const label = document.getElementById('authBarLabel');
   const invRow = document.getElementById('invRow');
+  const invGate = document.getElementById('invGate');
+  const scanningArea = document.getElementById('scanningArea');
+  const logCardWrap = document.getElementById('logCardWrap');
   if(localMode){
     gate.style.display = 'none';
     bar.style.display = 'block';
     app.style.display = 'block';
     label.innerHTML = '📱 <strong>Guardado local en este dispositivo</strong>';
-    invRow.style.display = 'flex';
+    invRow.style.display = appStarted ? 'flex' : 'none';
     const inv = inventarios.find(i => i.id === activeInvId);
     document.getElementById('activeInvName').textContent = inv ? inv.name : "—";
+    if(appStarted){
+      invGate.style.display = 'none';
+      scanningArea.style.display = 'block';
+      logCardWrap.style.display = 'block';
+    } else {
+      invGate.style.display = 'block';
+      scanningArea.style.display = 'none';
+      logCardWrap.style.display = 'none';
+      document.getElementById('gateNewInvName').value = "Conteo " + new Date().toLocaleDateString('es-AR');
+    }
   } else if(account){
     gate.style.display = 'none';
     bar.style.display = 'block';
     app.style.display = 'block';
     label.innerHTML = 'Conectado como <strong id="whoName">' + (account.username || account.name || "cuenta Microsoft") + '</strong>';
     invRow.style.display = 'none';
+    invGate.style.display = 'none';
+    scanningArea.style.display = 'block';
+    logCardWrap.style.display = 'block';
   } else {
     gate.style.display = 'block';
     bar.style.display = 'none';
@@ -626,6 +673,7 @@ async function login(){
 function logout(){
   if(localMode){
     localMode = false;
+    appStarted = false;
     localStorage.removeItem(LOCAL_MODE_KEY);
     sessionLog = [];
     updateAuthUI();
@@ -871,20 +919,36 @@ function updateLogView(){
   const inv = localMode ? inventarios.find(i => i.id === activeInvId) : null;
   document.getElementById('countSub').textContent = (inv ? ('"' + inv.name + '" — ') : '') + sessionLog.length + " items";
   body.innerHTML = "";
+
+  const scanningArea = document.getElementById('scanningArea');
+  const cerrarBox = document.getElementById('cerrarBox');
   const finalizarBox = document.getElementById('finalizarBox');
-  if(localMode && sessionLog.length > 0){
-    finalizarBox.style.display = 'block';
-    if(inv && inv.finalizado){
-      const fecha = inv.finalizadoAt ? new Date(inv.finalizadoAt).toLocaleString('es-AR') : '';
-      finalizarBox.innerHTML = `
-        <div class="hint" style="color:var(--amber); margin-bottom:8px;">⚠️ Este inventario ya se mandó a la base el ${fecha}. Volver a mandarlo crea un conteo duplicado.</div>
-        <button class="secondary" onclick="reenviarConfirmado()">Reenviar igual (no recomendado)</button>`;
+
+  if(localMode && inv && appStarted){
+    if(inv.cerrado){
+      scanningArea.style.display = 'none';
+      cerrarBox.innerHTML = '<div class="hint" style="margin-bottom:6px;">🔒 Inventario cerrado — no acepta más escaneos.</div><button class="ghost" onclick="reabrirInventario()">Reabrir para seguir escaneando</button>';
+      cerrarBox.style.display = sessionLog.length > 0 ? 'block' : 'none';
+      finalizarBox.style.display = sessionLog.length > 0 ? 'block' : 'none';
+      if(inv.finalizado){
+        const fecha = inv.finalizadoAt ? new Date(inv.finalizadoAt).toLocaleString('es-AR') : '';
+        finalizarBox.innerHTML = `
+          <div class="hint" style="color:var(--amber); margin-bottom:8px;">⚠️ Este inventario ya se mandó a la base el ${fecha}. Volver a mandarlo crea un conteo duplicado.</div>
+          <button class="secondary" onclick="reenviarConfirmado()">Reenviar igual (no recomendado)</button>`;
+      } else {
+        finalizarBox.innerHTML = `
+          <button class="primary" onclick="openModal('finalizar')">✅ Guardar inventario</button>
+          <div class="hint" style="margin-top:6px;">Manda este inventario a la base central de CORAZ (crea el conteo físico para revisar diferencias). Necesita tu usuario de CORAZ.</div>`;
+      }
     } else {
-      finalizarBox.innerHTML = `
-        <button class="primary" onclick="openModal('finalizar')">✅ Guardar inventario</button>
-        <div class="hint" style="margin-top:6px;">Manda este inventario a la base central de CORAZ (crea el conteo físico para revisar diferencias). Necesita tu usuario de CORAZ.</div>`;
+      scanningArea.style.display = 'block';
+      finalizarBox.style.display = 'none';
+      cerrarBox.innerHTML = '<button class="secondary" onclick="cerrarInventario()">🔒 Cerrar inventario</button><div class="hint" style="margin-top:6px;">Deja de aceptar escaneos nuevos en este inventario y habilita mandarlo a la base.</div>';
+      cerrarBox.style.display = sessionLog.length > 0 ? 'block' : 'none';
     }
-  } else {
+  } else if(!localMode){
+    scanningArea.style.display = 'block';
+    cerrarBox.style.display = 'none';
     finalizarBox.style.display = 'none';
   }
   if(sessionLog.length === 0){ empty.style.display='block'; return; }
@@ -968,6 +1032,24 @@ async function ensureSupabaseToken(){
   sbAccessToken = null; sbRefreshToken = null; sbExpiresAt = 0;
   localStorage.removeItem(SB_SESSION_KEY);
   return null;
+}
+
+function cerrarInventario(){
+  const inv = inventarios.find(i => i.id === activeInvId);
+  if(!inv) return;
+  if(!confirm('¿Cerrar "' + inv.name + '"? No vas a poder escanear más acá hasta que lo reabras.')) return;
+  inv.cerrado = true;
+  saveInventariosList();
+  updateLogView();
+  showToast("Inventario cerrado. Ya podés guardarlo.", "ok");
+}
+
+function reabrirInventario(){
+  const inv = inventarios.find(i => i.id === activeInvId);
+  if(!inv) return;
+  inv.cerrado = false;
+  saveInventariosList();
+  updateLogView();
 }
 
 function reenviarConfirmado(){
