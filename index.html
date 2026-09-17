@@ -148,8 +148,24 @@
   <p>Iniciá sesión con tu cuenta personal de Microsoft para que los conteos se guarden directo en tu Excel de OneDrive.<br><br>Antes necesitás cargar el <strong>Client ID</strong> de tu app de Azure en ⚙ Configuración.</p>
   <button class="primary" onclick="login()">Iniciar sesión con Microsoft</button>
   <div style="margin:14px 0; color:var(--text-dim); font-size:11px; text-transform:uppercase; letter-spacing:.08em;">— o —</div>
-  <button class="secondary" onclick="useLocalMode()">📱 Guardado local en este dispositivo</button>
-  <p style="margin-top:10px;">Escaneás sin login. Los conteos quedan en inventarios separados en este celular. Cuando termines, "Mandar inventario a CORAZ" lo manda a la base central de CORAZ (ahí sí te va a pedir tu usuario).</p>
+  <button class="secondary" onclick="showLocalAuthGate()">📱 Guardado local en este dispositivo</button>
+  <p style="margin-top:10px;">Escaneás sin login de Microsoft. Los conteos quedan en inventarios separados en este celular, y cuando termines se mandan a la base central de CORAZ. Para eso necesitás tu usuario de CORAZ desde el arranque.</p>
+</div>
+
+<div id="localAuthGate" style="display:none; padding:40px 20px; text-align:center;">
+  <p style="color:var(--text-dim); font-size:13px; line-height:1.6; margin-bottom:18px;">Iniciá sesión con tu usuario de CORAZ antes de empezar a escanear (así sabemos quién contó qué, y ya queda listo para mandar el inventario al terminar).</p>
+  <div class="field" style="text-align:left;">
+    <label>Email</label>
+    <input id="localSbEmail" type="email" placeholder="tu@corazautopartes.com">
+  </div>
+  <div class="field" style="text-align:left;">
+    <label>Contraseña</label>
+    <input id="localSbPassword" type="password">
+  </div>
+  <button class="primary" onclick="loginSupabaseThenLocalMode()">Iniciar sesión y empezar</button>
+  <div style="margin-top:10px;">
+    <button class="ghost" onclick="hideLocalAuthGate()">Volver</button>
+  </div>
 </div>
 
 <main id="mainApp" style="display:none;">
@@ -223,9 +239,10 @@
 
     <div style="font-weight:600; color:var(--amber); font-size:13px; margin:14px 0 4px;">El flujo en modo local</div>
     <ol style="margin:6px 0 0 18px; padding:0; color:var(--text-dim); font-size:13px; line-height:1.6;">
-      <li><b style="color:var(--text);">Comenzás un inventario:</b> al entrar, la app SIEMPRE te pregunta si querés arrancar uno nuevo o continuar uno existente — nunca sigue solo con lo que quedó de la vez anterior, justo para evitar mandar datos viejos por error.</li>
+      <li><b style="color:var(--text);">Iniciás sesión:</b> al elegir "Guardado local", primero te pide tu usuario de CORAZ — así queda listo desde el arranque, sin sorpresas al final.</li>
+      <li><b style="color:var(--text);">Comenzás un inventario:</b> la app SIEMPRE te pregunta si querés arrancar uno nuevo o continuar uno existente — nunca sigue solo con lo que quedó de la vez anterior, justo para evitar mandar datos viejos por error.</li>
       <li><b style="color:var(--text);">Escaneás:</b> apuntás la cámara al código o lo cargás a mano. Completás los campos (los definís en ⚙) y <b>➕ Agregar y seguir escaneando</b>.</li>
-      <li><b style="color:var(--text);">Lo mandás:</b> cuando terminaste de contar, tocás <b>📤 Mandar inventario a CORAZ</b> — te pide tu usuario, crea el "conteo físico" en la base central, y cierra este inventario solo (no acepta más escaneos). Si ya lo habías mandado antes, te avisa y pide confirmar de nuevo antes de duplicarlo.</li>
+      <li><b style="color:var(--text);">Lo mandás:</b> cuando terminaste de contar, tocás <b>📤 Mandar inventario a CORAZ</b> — crea el "conteo físico" en la base central y cierra este inventario solo (no acepta más escaneos). Si ya lo habías mandado antes, te avisa y pide confirmar de nuevo antes de duplicarlo.</li>
     </ol>
 
     <div style="font-weight:600; color:var(--amber); font-size:13px; margin:14px 0 4px;">Modos de guardado del escaneo</div>
@@ -445,6 +462,13 @@ async function init(){
   }
 
   if(localStorage.getItem(LOCAL_MODE_KEY) === '1'){
+    const token = await ensureSupabaseToken();
+    if(!token){
+      localStorage.removeItem(LOCAL_MODE_KEY);
+      showLocalAuthGate();
+      updateLogView();
+      return;
+    }
     localMode = true;
     loadInventariosList();
     if(inventarios.length === 0){
@@ -976,10 +1000,8 @@ function exportCSV(){
 }
 
 // ---------- Finalizar inventario -> Supabase (stock-conteo-preview) ----------
-async function loginSupabaseAndFinalize(){
-  const email = document.getElementById('sbEmail').value.trim();
-  const password = document.getElementById('sbPassword').value;
-  if(!email || !password){ showToast("Completá email y contraseña", "bad"); return; }
+async function doSupabaseLogin(email, password){
+  if(!email || !password){ showToast("Completá email y contraseña", "bad"); return false; }
   try{
     const res = await fetchConReintento(SUPABASE_URL + "/auth/v1/token?grant_type=password", {
       method: "POST",
@@ -989,17 +1011,45 @@ async function loginSupabaseAndFinalize(){
     const data = await res.json();
     if(!res.ok || !data.access_token){
       showToast("Login incorrecto: " + (data.error_description || data.msg || res.status), "bad");
-      return;
+      return false;
     }
     sbAccessToken = data.access_token;
     sbRefreshToken = data.refresh_token;
     sbExpiresAt = Date.now() + (data.expires_in ? data.expires_in * 1000 : 3600000) - 30000;
     localStorage.setItem(SB_SESSION_KEY, JSON.stringify({access_token: sbAccessToken, refresh_token: sbRefreshToken, expires_at: sbExpiresAt}));
-    document.getElementById('sbPassword').value = "";
-    openModal('finalizar');
+    return true;
   }catch(e){
     showToast("Error de conexión: " + e.message, "bad");
+    return false;
   }
+}
+
+function showLocalAuthGate(){
+  document.getElementById('authGate').style.display = 'none';
+  document.getElementById('localAuthGate').style.display = 'block';
+}
+function hideLocalAuthGate(){
+  document.getElementById('localAuthGate').style.display = 'none';
+  document.getElementById('authGate').style.display = 'block';
+}
+
+async function loginSupabaseThenLocalMode(){
+  const email = document.getElementById('localSbEmail').value.trim();
+  const password = document.getElementById('localSbPassword').value;
+  const ok = await doSupabaseLogin(email, password);
+  if(!ok) return;
+  document.getElementById('localSbPassword').value = "";
+  document.getElementById('localAuthGate').style.display = 'none';
+  useLocalMode();
+}
+
+async function loginSupabaseAndFinalize(){
+  const email = document.getElementById('sbEmail').value.trim();
+  const password = document.getElementById('sbPassword').value;
+  const ok = await doSupabaseLogin(email, password);
+  if(!ok) return;
+  document.getElementById('sbPassword').value = "";
+  openModal('finalizar');
 }
 
 async function ensureSupabaseToken(){
