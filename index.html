@@ -149,7 +149,7 @@
   <button class="primary" onclick="login()">Iniciar sesión con Microsoft</button>
   <div style="margin:14px 0; color:var(--text-dim); font-size:11px; text-transform:uppercase; letter-spacing:.08em;">— o —</div>
   <button class="secondary" onclick="useLocalMode()">📱 Guardado local en este dispositivo</button>
-  <p style="margin-top:10px;">Escaneás sin login. Los conteos quedan en inventarios separados en este celular. Cuando termines, "Guardar inventario" lo manda a la base central de CORAZ (ahí sí te va a pedir tu usuario).</p>
+  <p style="margin-top:10px;">Escaneás sin login. Los conteos quedan en inventarios separados en este celular. Cuando termines, "Mandar inventario a CORAZ" lo manda a la base central de CORAZ (ahí sí te va a pedir tu usuario).</p>
 </div>
 
 <main id="mainApp" style="display:none;">
@@ -185,7 +185,7 @@
         <div class="code-display" id="currentCode">—</div>
       </div>
       <div id="dynamicFieldsContainer"></div>
-      <button class="primary" onclick="saveItem()">Guardar y continuar escaneando</button>
+      <button class="primary" onclick="saveItem()">➕ Agregar y seguir escaneando</button>
       <div style="margin-top:8px;">
         <button class="ghost" onclick="cancelForm()">Cancelar</button>
       </div>
@@ -202,10 +202,7 @@
       <tbody id="logBody"></tbody>
     </table>
     <div id="emptyLog" style="color:var(--text-dim); font-size:13px; padding:10px 0;">Todavía no escaneaste nada.</div>
-    <div id="cerrarBox" style="margin-top:10px; display:none;">
-      <button class="secondary" onclick="cerrarInventario()">🔒 Cerrar inventario</button>
-      <div class="hint" style="margin-top:6px;">Deja de aceptar escaneos nuevos en este inventario y habilita mandarlo a la base.</div>
-    </div>
+    <div id="cerrarBox" style="display:none;"></div>
     <div id="finalizarBox" style="margin-top:12px; display:none;"></div>
   </div>
 
@@ -227,9 +224,8 @@
     <div style="font-weight:600; color:var(--amber); font-size:13px; margin:14px 0 4px;">El flujo en modo local</div>
     <ol style="margin:6px 0 0 18px; padding:0; color:var(--text-dim); font-size:13px; line-height:1.6;">
       <li><b style="color:var(--text);">Comenzás un inventario:</b> al entrar, la app SIEMPRE te pregunta si querés arrancar uno nuevo o continuar uno existente — nunca sigue solo con lo que quedó de la vez anterior, justo para evitar mandar datos viejos por error.</li>
-      <li><b style="color:var(--text);">Escaneás:</b> apuntás la cámara al código o lo cargás a mano. Completás los campos (los definís en ⚙) y "Guardar y continuar".</li>
-      <li><b style="color:var(--text);">Cerrás el inventario:</b> cuando terminaste de contar, tocás <b>🔒 Cerrar inventario</b>. Deja de aceptar escaneos nuevos ahí (se puede reabrir si te equivocaste).</li>
-      <li><b style="color:var(--text);">Lo guardás:</b> recién con el inventario cerrado aparece <b>✅ Guardar inventario</b>, que lo manda a la base central de CORAZ (crea el "conteo físico", te pide tu usuario). Si ya lo habías mandado antes, te avisa y pide confirmar de nuevo antes de duplicarlo.</li>
+      <li><b style="color:var(--text);">Escaneás:</b> apuntás la cámara al código o lo cargás a mano. Completás los campos (los definís en ⚙) y <b>➕ Agregar y seguir escaneando</b>.</li>
+      <li><b style="color:var(--text);">Lo mandás:</b> cuando terminaste de contar, tocás <b>📤 Mandar inventario a CORAZ</b> — te pide tu usuario, crea el "conteo físico" en la base central, y cierra este inventario solo (no acepta más escaneos). Si ya lo habías mandado antes, te avisa y pide confirmar de nuevo antes de duplicarlo.</li>
     </ol>
 
     <div style="font-weight:600; color:var(--amber); font-size:13px; margin:14px 0 4px;">Modos de guardado del escaneo</div>
@@ -242,7 +238,7 @@
     <ul style="margin:6px 0 0 18px; padding:0; color:var(--text-dim); font-size:13px; line-height:1.6;">
       <li><b style="color:var(--text);">📷 Escanear / Ingresar manual:</b> capturar el código con cámara o tipeándolo.</li>
       <li><b style="color:var(--text);">Exportar CSV:</b> baja lo contado como archivo, por si querés pasarlo a mano.</li>
-      <li><b style="color:var(--text);">⚙ Configuración:</b> Client ID de Azure, ruta del Excel, nombre de la tabla, campos del formulario y catálogo. Para "Guardar inventario" hace falta un campo <b>Cantidad</b>.</li>
+      <li><b style="color:var(--text);">⚙ Configuración:</b> Client ID de Azure, ruta del Excel, nombre de la tabla, campos del formulario y catálogo. Para "Mandar inventario a CORAZ" hace falta un campo <b>Cantidad</b>.</li>
     </ul>
 
     <div style="font-weight:600; color:var(--amber); font-size:13px; margin:14px 0 4px;">Si algo falla</div>
@@ -273,7 +269,7 @@
     <div class="field">
       <label>Campos del formulario (uno por línea)</label>
       <textarea id="cfgFields" style="min-height:110px;"></textarea>
-      <div class="hint">Además del Código (fijo). Para que "Guardar inventario" funcione, uno de estos campos tiene que tener "cantidad" en el nombre (ej: "Cantidad contada"), y opcionalmente otro con "estado" (valores Bueno/Dañado/Faltante) — "Faltante" se manda como no-escaneado.</div>
+      <div class="hint">Además del Código (fijo). Para que "Mandar inventario a CORAZ" funcione, uno de estos campos tiene que tener "cantidad" en el nombre (ej: "Cantidad contada"), y opcionalmente otro con "estado" (valores Bueno/Dañado/Faltante) — "Faltante" se manda como no-escaneado.</div>
     </div>
     <div class="field">
       <label>Catálogo (pegar CSV: codigo,producto — una línea por producto)</label>
@@ -322,7 +318,7 @@
 <!-- Modal: finalizar inventario (envío a Supabase) -->
 <div class="modal-backdrop" id="modal-finalizar">
   <div class="modal">
-    <h2>Guardar inventario</h2>
+    <h2>Mandar inventario a CORAZ</h2>
     <div id="finalizarLoginSection">
       <p>Iniciá sesión con tu usuario de CORAZ para mandar este inventario a la base central.</p>
       <div class="field">
@@ -923,32 +919,28 @@ function updateLogView(){
   const scanningArea = document.getElementById('scanningArea');
   const cerrarBox = document.getElementById('cerrarBox');
   const finalizarBox = document.getElementById('finalizarBox');
+  cerrarBox.style.display = 'none'; // paso eliminado: mandar ya cierra solo
 
   if(localMode && inv && appStarted){
-    if(inv.cerrado){
-      scanningArea.style.display = 'none';
-      cerrarBox.innerHTML = '<div class="hint" style="margin-bottom:6px;">🔒 Inventario cerrado — no acepta más escaneos.</div><button class="ghost" onclick="reabrirInventario()">Reabrir para seguir escaneando</button>';
-      cerrarBox.style.display = sessionLog.length > 0 ? 'block' : 'none';
-      finalizarBox.style.display = sessionLog.length > 0 ? 'block' : 'none';
-      if(inv.finalizado){
+    const yaEnviado = !!inv.finalizado;
+    scanningArea.style.display = yaEnviado ? 'none' : 'block';
+    if(sessionLog.length > 0){
+      finalizarBox.style.display = 'block';
+      if(yaEnviado){
         const fecha = inv.finalizadoAt ? new Date(inv.finalizadoAt).toLocaleString('es-AR') : '';
         finalizarBox.innerHTML = `
           <div class="hint" style="color:var(--amber); margin-bottom:8px;">⚠️ Este inventario ya se mandó a la base el ${fecha}. Volver a mandarlo crea un conteo duplicado.</div>
           <button class="secondary" onclick="reenviarConfirmado()">Reenviar igual (no recomendado)</button>`;
       } else {
         finalizarBox.innerHTML = `
-          <button class="primary" onclick="openModal('finalizar')">✅ Guardar inventario</button>
-          <div class="hint" style="margin-top:6px;">Manda este inventario a la base central de CORAZ (crea el conteo físico para revisar diferencias). Necesita tu usuario de CORAZ.</div>`;
+          <button class="primary" onclick="openModal('finalizar')">📤 Mandar inventario a CORAZ</button>
+          <div class="hint" style="margin-top:6px;">Manda todo lo escaneado a la base central de CORAZ (crea el conteo físico para revisar diferencias) y cierra este inventario. Necesita tu usuario de CORAZ.</div>`;
       }
     } else {
-      scanningArea.style.display = 'block';
       finalizarBox.style.display = 'none';
-      cerrarBox.innerHTML = '<button class="secondary" onclick="cerrarInventario()">🔒 Cerrar inventario</button><div class="hint" style="margin-top:6px;">Deja de aceptar escaneos nuevos en este inventario y habilita mandarlo a la base.</div>';
-      cerrarBox.style.display = sessionLog.length > 0 ? 'block' : 'none';
     }
   } else if(!localMode){
     scanningArea.style.display = 'block';
-    cerrarBox.style.display = 'none';
     finalizarBox.style.display = 'none';
   }
   if(sessionLog.length === 0){ empty.style.display='block'; return; }
@@ -1032,24 +1024,6 @@ async function ensureSupabaseToken(){
   sbAccessToken = null; sbRefreshToken = null; sbExpiresAt = 0;
   localStorage.removeItem(SB_SESSION_KEY);
   return null;
-}
-
-function cerrarInventario(){
-  const inv = inventarios.find(i => i.id === activeInvId);
-  if(!inv) return;
-  if(!confirm('¿Cerrar "' + inv.name + '"? No vas a poder escanear más acá hasta que lo reabras.')) return;
-  inv.cerrado = true;
-  saveInventariosList();
-  updateLogView();
-  showToast("Inventario cerrado. Ya podés guardarlo.", "ok");
-}
-
-function reabrirInventario(){
-  const inv = inventarios.find(i => i.id === activeInvId);
-  if(!inv) return;
-  inv.cerrado = false;
-  saveInventariosList();
-  updateLogView();
 }
 
 function reenviarConfirmado(){
